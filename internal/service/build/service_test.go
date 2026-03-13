@@ -9,16 +9,20 @@ import (
 )
 
 type memoryRepo struct {
-	request model.BuildRequest
-	results []model.BuildResult
-	items   map[model.ID][]model.BuildResultItem
+	request          model.BuildRequest
+	results          []model.BuildResult
+	items            map[model.ID][]model.BuildResultItem
+	ListProductsFunc func(context.Context, []model.SourcePlatform, int) ([]model.Product, error)
 }
 
 func newMemoryRepo() *memoryRepo {
 	return &memoryRepo{items: map[model.ID][]model.BuildResultItem{}}
 }
 
-func (r *memoryRepo) ListProducts(_ context.Context, _ []model.SourcePlatform, _ int) ([]model.Product, error) {
+func (r *memoryRepo) ListProducts(ctx context.Context, platforms []model.SourcePlatform, limit int) ([]model.Product, error) {
+	if r.ListProductsFunc != nil {
+		return r.ListProductsFunc(ctx, platforms, limit)
+	}
 	return []model.Product{
 		{ID: "gpu-1", SourcePlatform: model.PlatformJD, Title: "RTX 4060 官方自营", Price: 2099, Availability: "in_stock", Attributes: map[string]any{"category": "GPU"}},
 		{ID: "cpu-1", SourcePlatform: model.PlatformJD, Title: "Ryzen 5 7500F 官方自营", Price: 1199, Availability: "in_stock", Attributes: map[string]any{"category": "CPU"}},
@@ -238,6 +242,44 @@ func TestNormalizeProductRejectsBundledCPUSet(t *testing.T) {
 	}, model.UseCaseGaming)
 	if ok {
 		t.Fatal("expected bundled CPU set to be rejected")
+	}
+}
+
+func TestGeneratePriceCatalogAggregatesRealProducts(t *testing.T) {
+	repo := newMemoryRepo()
+	service := New(repo, func() time.Time {
+		return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC)
+	})
+
+	repoProducts := []model.Product{
+		{ID: "ram-1", SourcePlatform: model.PlatformJD, Title: "光威 32GB DDR5 6000 台式机内存条", Price: 499, Availability: "in_stock", Attributes: map[string]any{"category": "RAM"}},
+		{ID: "ram-2", SourcePlatform: model.PlatformGoofish, Title: "金士顿 32GB DDR5 6000 台式机内存条", Price: 459, Availability: "in_stock", Attributes: map[string]any{"category": "RAM"}},
+		{ID: "ram-mock", SourcePlatform: model.PlatformJD, Title: "海盗船 32GB DDR5 6000 台式机内存条", Price: 399, Availability: "in_stock", Attributes: map[string]any{"category": "RAM"}, RawPayload: map[string]any{"mock": true}},
+	}
+	repo.ListProductsFunc = func(_ context.Context, _ []model.SourcePlatform, _ int) ([]model.Product, error) {
+		return repoProducts, nil
+	}
+
+	response, err := service.GeneratePriceCatalog(context.Background(), CatalogRequest{
+		UseCase:   model.UseCaseGaming,
+		BuildMode: model.ModeMixed,
+		Limit:     20,
+	})
+	if err != nil {
+		t.Fatalf("GeneratePriceCatalog() error = %v", err)
+	}
+	if len(response.Items) != 1 {
+		t.Fatalf("expected 1 aggregated catalog item, got %d", len(response.Items))
+	}
+	item := response.Items[0]
+	if item.SampleCount != 2 {
+		t.Fatalf("expected sample_count 2, got %d", item.SampleCount)
+	}
+	if item.AvgPrice != 479 {
+		t.Fatalf("expected avg_price 479, got %v", item.AvgPrice)
+	}
+	if len(item.SourceBreakdown) != 2 {
+		t.Fatalf("expected 2 source breakdown entries, got %d", len(item.SourceBreakdown))
 	}
 }
 

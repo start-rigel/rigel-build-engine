@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rigel-labs/rigel-build-engine/internal/config"
+	"github.com/rigel-labs/rigel-build-engine/internal/domain/model"
 	buildservice "github.com/rigel-labs/rigel-build-engine/internal/service/build"
 )
 
@@ -24,6 +25,7 @@ func New(cfg config.Config, builder *buildservice.Service) *App {
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", a.handleHealth)
+	mux.HandleFunc("/api/v1/catalog/prices", a.handleCatalogPrices)
 	mux.HandleFunc("/api/v1/builds/generate", a.handleGenerate)
 	mux.HandleFunc("/api/v1/builds/", a.handleGetBuild)
 	mux.HandleFunc("/api/v1/parts/search", a.handleSearchParts)
@@ -41,6 +43,7 @@ func (a *App) handleIndex(w http.ResponseWriter, _ *http.Request) {
 		"mode":    a.cfg.BuildEngineMode,
 		"routes": []string{
 			"GET /healthz",
+			"GET /api/v1/catalog/prices",
 			"POST /api/v1/builds/generate",
 			"GET /api/v1/builds/{id}",
 			"GET /api/v1/parts/search",
@@ -59,6 +62,26 @@ func (a *App) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response, err := a.builder.Generate(r.Context(), req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (a *App) handleCatalogPrices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	useCase := model.UseCase(strings.TrimSpace(r.URL.Query().Get("use_case")))
+	buildMode := model.BuildMode(strings.TrimSpace(r.URL.Query().Get("build_mode")))
+	response, err := a.builder.GeneratePriceCatalog(r.Context(), buildservice.CatalogRequest{
+		UseCase:   useCase,
+		BuildMode: buildMode,
+		Limit:     limit,
+	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

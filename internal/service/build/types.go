@@ -9,6 +9,12 @@ type GenerateRequest struct {
 	BuildMode model.BuildMode `json:"build_mode"`
 }
 
+type CatalogRequest struct {
+	UseCase   model.UseCase   `json:"use_case"`
+	BuildMode model.BuildMode `json:"build_mode"`
+	Limit     int             `json:"limit"`
+}
+
 // Response is the public JSON structure returned by the build engine.
 type Response struct {
 	BuildRequestID string            `json:"build_request_id"`
@@ -50,4 +56,34 @@ type CompatibilityFinding struct {
 	Severity model.RiskLevel `json:"severity"`
 	Message  string          `json:"message"`
 	Passed   bool            `json:"passed"`
+}
+
+type PriceCatalogResponse struct {
+	UseCase   model.UseCase      `json:"use_case"`
+	BuildMode model.BuildMode    `json:"build_mode"`
+	Warnings  []string           `json:"warnings,omitempty"`
+	Items     []PriceCatalogItem `json:"items"`
+}
+
+type PriceCatalogItem struct {
+	Category        model.PartCategory       `json:"category"`
+	Brand           string                   `json:"brand"`
+	Model           string                   `json:"model"`
+	DisplayName     string                   `json:"display_name"`
+	NormalizedKey   string                   `json:"normalized_key"`
+	SampleCount     int                      `json:"sample_count"`
+	AvgPrice        float64                  `json:"avg_price"`
+	MedianPrice     float64                  `json:"median_price"`
+	MinPrice        float64                  `json:"min_price"`
+	MaxPrice        float64                  `json:"max_price"`
+	Platforms       []model.SourcePlatform   `json:"platforms"`
+	SourceBreakdown []PriceCatalogSourceItem `json:"source_breakdown,omitempty"`
+}
+
+type PriceCatalogSourceItem struct {
+	SourcePlatform model.SourcePlatform `json:"source_platform"`
+	SampleCount    int                  `json:"sample_count"`
+	AvgPrice       float64              `json:"avg_price"`
+	MinPrice       float64              `json:"min_price"`
+	MaxPrice       float64              `json:"max_price"`
 }

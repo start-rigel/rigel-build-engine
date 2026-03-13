@@ -75,3 +75,15 @@ func TestGenerateRoute(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestCatalogPricesRoute(t *testing.T) {
+	repo := &memoryRepo{}
+	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local"}, builder)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/prices?use_case=gaming&build_mode=new_only&limit=20", nil)
+	rec := httptest.NewRecorder()
+	application.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

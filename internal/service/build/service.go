@@ -57,7 +57,9 @@ type selectionProfile struct {
 }
 
 var (
-	wattRegexp = regexp.MustCompile(`(?i)(\d{3,4})\s*w`)
+	wattRegexp     = regexp.MustCompile(`(?i)(\d{3,4})\s*w`)
+	speedRegexp    = regexp.MustCompile(`(?i)\b(3200|3600|4800|5200|5600|6000|6400|6800)\b`)
+	capacityRegexp = regexp.MustCompile(`(?i)(\d+)\s*gb`)
 )
 
 const shopTypeSelfOperated = model.ShopType("self_operated")
@@ -113,6 +115,72 @@ func (s *Service) GetBuild(ctx context.Context, requestID string) (Response, err
 
 func (s *Service) SearchParts(ctx context.Context, keyword string, limit int) ([]model.PartSearchResult, error) {
 	return s.repo.SearchParts(ctx, keyword, limit)
+}
+
+func (s *Service) GeneratePriceCatalog(ctx context.Context, req CatalogRequest) (PriceCatalogResponse, error) {
+	if req.UseCase == "" {
+		req.UseCase = model.UseCaseGaming
+	}
+	if req.BuildMode == "" {
+		req.BuildMode = model.ModeMixed
+	}
+	if req.Limit <= 0 {
+		req.Limit = 500
+	}
+
+	platforms, warnings := allowedPlatforms(req.BuildMode)
+	products, err := s.repo.ListProducts(ctx, platforms, req.Limit)
+	if err != nil {
+		return PriceCatalogResponse{}, err
+	}
+
+	aggregates := map[string]*catalogAccumulator{}
+	for _, product := range products {
+		if isMockProduct(product) {
+			continue
+		}
+		candidate, ok := normalizeProduct(product, req.UseCase)
+		if !ok {
+			continue
+		}
+		key := catalogGroupKey(candidate)
+		acc, ok := aggregates[key]
+		if !ok {
+			acc = &catalogAccumulator{
+				Category:      candidate.Category,
+				Brand:         candidate.Brand,
+				Model:         candidate.Model,
+				DisplayName:   catalogDisplayName(candidate.Category, candidate.Brand, candidate.Model),
+				NormalizedKey: key,
+				platforms:     map[model.SourcePlatform]*sourceAccumulator{},
+				brands:        map[string]struct{}{},
+			}
+			aggregates[key] = acc
+		}
+		acc.add(candidate)
+	}
+
+	response := PriceCatalogResponse{
+		UseCase:   req.UseCase,
+		BuildMode: req.BuildMode,
+		Warnings:  dedupeStrings(warnings),
+		Items:     make([]PriceCatalogItem, 0, len(aggregates)),
+	}
+	for _, acc := range aggregates {
+		response.Items = append(response.Items, acc.toPayload())
+	}
+	sort.SliceStable(response.Items, func(i, j int) bool {
+		leftCategory := categoryOrder(response.Items[i].Category)
+		rightCategory := categoryOrder(response.Items[j].Category)
+		if leftCategory != rightCategory {
+			return leftCategory < rightCategory
+		}
+		if response.Items[i].AvgPrice != response.Items[j].AvgPrice {
+			return response.Items[i].AvgPrice < response.Items[j].AvgPrice
+		}
+		return response.Items[i].DisplayName < response.Items[j].DisplayName
+	})
+	return response, nil
 }
 
 func (s *Service) generateAndPersist(ctx context.Context, req model.BuildRequest) (Response, error) {
@@ -293,7 +361,7 @@ func normalizeProduct(product model.Product, useCase model.UseCase) (normalizedC
 		return normalizedCandidate{}, false
 	}
 	brand := detectBrand(product.Title)
-	modelName := inferModel(product.Title, brand)
+	modelName := inferCanonicalModel(category, product.Title, brand, useCase)
 	platformFamily := inferPlatformFamily(category, product.Title, useCase)
 	memoryType := inferMemoryType(category, product.Title, useCase)
 	psuWattage := inferPSUWattage(category, product.Title, useCase)
@@ -521,6 +589,142 @@ func totalScore(selected map[model.PartCategory]normalizedCandidate, budget floa
 		score = 1
 	}
 	return math.Round(score*100) / 100
+}
+
+type catalogAccumulator struct {
+	Category      model.PartCategory
+	Brand         string
+	Model         string
+	DisplayName   string
+	NormalizedKey string
+	prices        []float64
+	platforms     map[model.SourcePlatform]*sourceAccumulator
+	brands        map[string]struct{}
+}
+
+type sourceAccumulator struct {
+	prices []float64
+}
+
+func (c *catalogAccumulator) add(candidate normalizedCandidate) {
+	c.prices = append(c.prices, candidate.Product.Price)
+	if candidate.Brand != "" {
+		c.brands[candidate.Brand] = struct{}{}
+	}
+	entry, ok := c.platforms[candidate.SourcePlatform]
+	if !ok {
+		entry = &sourceAccumulator{}
+		c.platforms[candidate.SourcePlatform] = entry
+	}
+	entry.prices = append(entry.prices, candidate.Product.Price)
+}
+
+func (c *catalogAccumulator) toPayload() PriceCatalogItem {
+	brand := c.Brand
+	if len(c.brands) > 1 {
+		brand = "Mixed"
+	}
+	item := PriceCatalogItem{
+		Category:      c.Category,
+		Brand:         brand,
+		Model:         c.Model,
+		DisplayName:   catalogDisplayName(c.Category, brand, c.Model),
+		NormalizedKey: c.NormalizedKey,
+		SampleCount:   len(c.prices),
+		AvgPrice:      averagePrice(c.prices),
+		MedianPrice:   medianPrice(c.prices),
+		MinPrice:      minPrice(c.prices),
+		MaxPrice:      maxPrice(c.prices),
+		Platforms:     make([]model.SourcePlatform, 0, len(c.platforms)),
+	}
+	for platform, source := range c.platforms {
+		item.Platforms = append(item.Platforms, platform)
+		item.SourceBreakdown = append(item.SourceBreakdown, PriceCatalogSourceItem{
+			SourcePlatform: platform,
+			SampleCount:    len(source.prices),
+			AvgPrice:       averagePrice(source.prices),
+			MinPrice:       minPrice(source.prices),
+			MaxPrice:       maxPrice(source.prices),
+		})
+	}
+	sort.Slice(item.Platforms, func(i, j int) bool { return item.Platforms[i] < item.Platforms[j] })
+	sort.Slice(item.SourceBreakdown, func(i, j int) bool {
+		return item.SourceBreakdown[i].SourcePlatform < item.SourceBreakdown[j].SourcePlatform
+	})
+	return item
+}
+
+func averagePrice(prices []float64) float64 {
+	if len(prices) == 0 {
+		return 0
+	}
+	total := 0.0
+	for _, price := range prices {
+		total += price
+	}
+	return math.Round((total/float64(len(prices)))*100) / 100
+}
+
+func medianPrice(prices []float64) float64 {
+	if len(prices) == 0 {
+		return 0
+	}
+	sortedPrices := append([]float64(nil), prices...)
+	sort.Float64s(sortedPrices)
+	middle := len(sortedPrices) / 2
+	if len(sortedPrices)%2 == 1 {
+		return sortedPrices[middle]
+	}
+	return math.Round(((sortedPrices[middle-1]+sortedPrices[middle])/2)*100) / 100
+}
+
+func minPrice(prices []float64) float64 {
+	if len(prices) == 0 {
+		return 0
+	}
+	minimum := prices[0]
+	for _, price := range prices[1:] {
+		if price < minimum {
+			minimum = price
+		}
+	}
+	return minimum
+}
+
+func maxPrice(prices []float64) float64 {
+	if len(prices) == 0 {
+		return 0
+	}
+	maximum := prices[0]
+	for _, price := range prices[1:] {
+		if price > maximum {
+			maximum = price
+		}
+	}
+	return maximum
+}
+
+func categoryOrder(category model.PartCategory) int {
+	for index, item := range orderedCategories() {
+		if item == category {
+			return index
+		}
+	}
+	return len(orderedCategories()) + 1
+}
+
+func catalogGroupKey(candidate normalizedCandidate) string {
+	return slugify(string(candidate.Category) + "-" + candidate.Model)
+}
+
+func catalogDisplayName(category model.PartCategory, brand, modelName string) string {
+	if brand == "" || brand == "Mixed" || strings.Contains(strings.ToLower(modelName), strings.ToLower(brand)) {
+		return strings.TrimSpace(fmt.Sprintf("%s %s", category, modelName))
+	}
+	if strings.HasPrefix(modelName, "DDR") {
+		return strings.TrimSpace(fmt.Sprintf("%s %s", category, modelName))
+	}
+	return displayName(category, brand, modelName)
 }
 
 func compatibilityPassed(findings []CompatibilityFinding) bool {
@@ -782,6 +986,25 @@ func inferModel(title, brand string) string {
 		words = words[:4]
 	}
 	return strings.Join(words, " ")
+}
+
+func inferCanonicalModel(category model.PartCategory, title, brand string, useCase model.UseCase) string {
+	switch category {
+	case model.CategoryRAM:
+		memoryType := inferMemoryType(category, title, useCase)
+		speed := ""
+		if match := speedRegexp.FindStringSubmatch(title); len(match) == 2 {
+			speed = match[1]
+		}
+		capacity := ""
+		if match := capacityRegexp.FindStringSubmatch(strings.ToLower(title)); len(match) == 2 {
+			capacity = match[1]
+		}
+		if memoryType != "" && speed != "" && capacity != "" {
+			return fmt.Sprintf("%s %s %sG", memoryType, speed, capacity)
+		}
+	}
+	return inferModel(title, brand)
 }
 
 func inferPlatformFamily(category model.PartCategory, title string, useCase model.UseCase) string {
