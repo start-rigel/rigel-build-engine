@@ -12,6 +12,8 @@ type memoryRepo struct {
 	request          model.BuildRequest
 	results          []model.BuildResult
 	items            map[model.ID][]model.BuildResultItem
+	mappings         []model.ProductPartMapping
+	summaries        []model.PartMarketSummary
 	ListProductsFunc func(context.Context, []model.SourcePlatform, int) ([]model.Product, error)
 }
 
@@ -39,7 +41,13 @@ func (r *memoryRepo) EnsurePart(_ context.Context, part model.Part) (model.Part,
 	return part, nil
 }
 
-func (r *memoryRepo) UpsertProductMapping(_ context.Context, _ model.ProductPartMapping) error {
+func (r *memoryRepo) UpsertProductMapping(_ context.Context, mapping model.ProductPartMapping) error {
+	r.mappings = append(r.mappings, mapping)
+	return nil
+}
+
+func (r *memoryRepo) UpsertPartMarketSummary(_ context.Context, summary model.PartMarketSummary) error {
+	r.summaries = append(r.summaries, summary)
 	return nil
 }
 
@@ -281,6 +289,12 @@ func TestGeneratePriceCatalogAggregatesRealProducts(t *testing.T) {
 	if len(item.SourceBreakdown) != 2 {
 		t.Fatalf("expected 2 source breakdown entries, got %d", len(item.SourceBreakdown))
 	}
+	if len(repo.mappings) != 2 {
+		t.Fatalf("expected 2 product mappings, got %d", len(repo.mappings))
+	}
+	if len(repo.summaries) != 2 {
+		t.Fatalf("expected 2 platform summaries, got %d", len(repo.summaries))
+	}
 }
 
 func TestGeneratePriceCatalogCanonicalizesCPUGPUSSD(t *testing.T) {
@@ -340,6 +354,12 @@ func TestGeneratePriceCatalogCanonicalizesCPUGPUSSD(t *testing.T) {
 	}
 	if ssdItem.SampleCount != 2 {
 		t.Fatalf("expected SSD sample count 2, got %d", ssdItem.SampleCount)
+	}
+	if len(repo.mappings) != 6 {
+		t.Fatalf("expected 6 product mappings, got %d", len(repo.mappings))
+	}
+	if len(repo.summaries) != 6 {
+		t.Fatalf("expected 6 platform summaries, got %d", len(repo.summaries))
 	}
 }
 

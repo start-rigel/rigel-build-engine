@@ -18,6 +18,7 @@ type Repository interface {
 	SearchParts(ctx context.Context, keyword string, limit int) ([]model.PartSearchResult, error)
 	EnsurePart(ctx context.Context, part model.Part) (model.Part, error)
 	UpsertProductMapping(ctx context.Context, mapping model.ProductPartMapping) error
+	UpsertPartMarketSummary(ctx context.Context, summary model.PartMarketSummary) error
 	CreateBuildRequest(ctx context.Context, req model.BuildRequest) (model.BuildRequest, error)
 	UpdateBuildRequestStatus(ctx context.Context, requestID model.ID, status model.BuildStatus) error
 	CreateBuildResult(ctx context.Context, result model.BuildResult) (model.BuildResult, error)
@@ -146,6 +147,7 @@ func (s *Service) GeneratePriceCatalog(ctx context.Context, req CatalogRequest) 
 	}
 
 	aggregates := map[string]*catalogAccumulator{}
+	groupedCandidates := map[string][]normalizedCandidate{}
 	for _, product := range products {
 		if isMockProduct(product) {
 			continue
@@ -155,6 +157,7 @@ func (s *Service) GeneratePriceCatalog(ctx context.Context, req CatalogRequest) 
 			continue
 		}
 		key := catalogGroupKey(candidate)
+		groupedCandidates[key] = append(groupedCandidates[key], candidate)
 		acc, ok := aggregates[key]
 		if !ok {
 			acc = &catalogAccumulator{
@@ -179,6 +182,9 @@ func (s *Service) GeneratePriceCatalog(ctx context.Context, req CatalogRequest) 
 	}
 	for _, acc := range aggregates {
 		response.Items = append(response.Items, acc.toPayload())
+		if err := s.persistCatalogAggregate(ctx, acc, groupedCandidates[acc.NormalizedKey]); err != nil {
+			return PriceCatalogResponse{}, err
+		}
 	}
 	sort.SliceStable(response.Items, func(i, j int) bool {
 		leftCategory := categoryOrder(response.Items[i].Category)
@@ -192,6 +198,49 @@ func (s *Service) GeneratePriceCatalog(ctx context.Context, req CatalogRequest) 
 		return response.Items[i].DisplayName < response.Items[j].DisplayName
 	})
 	return response, nil
+}
+
+func (s *Service) persistCatalogAggregate(ctx context.Context, acc *catalogAccumulator, candidates []normalizedCandidate) error {
+	if acc == nil || len(candidates) == 0 {
+		return nil
+	}
+	part, err := s.repo.EnsurePart(ctx, model.Part{
+		Category:         acc.Category,
+		Brand:            choosePartBrand(acc),
+		Model:            acc.Model,
+		DisplayName:      catalogDisplayName(acc.Category, choosePartBrand(acc), acc.Model),
+		NormalizedKey:    acc.NormalizedKey,
+		SourceConfidence: 0.88,
+		AliasKeywords:    []string{acc.Model, acc.DisplayName},
+	})
+	if err != nil {
+		return err
+	}
+
+	groupedByPlatform := map[model.SourcePlatform][]normalizedCandidate{}
+	for _, candidate := range candidates {
+		if err := s.repo.UpsertProductMapping(ctx, model.ProductPartMapping{
+			ProductID:            candidate.Product.ID,
+			PartID:               part.ID,
+			MappingStatus:        model.MappingStatus("mapped"),
+			MatchConfidence:      candidate.MatchConfidence,
+			MatchedBy:            "catalog_aggregation",
+			CandidateDisplayName: candidate.DisplayName,
+			Reason:               "canonicalized from aggregated price catalog",
+		}); err != nil {
+			return err
+		}
+		groupedByPlatform[candidate.SourcePlatform] = append(groupedByPlatform[candidate.SourcePlatform], candidate)
+	}
+
+	collectedAt := s.clock().UTC()
+	for platform, items := range groupedByPlatform {
+		summary := summarizeCandidatesForPlatform(part.ID, platform, items, collectedAt)
+		if err := s.repo.UpsertPartMarketSummary(ctx, summary); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) generateAndPersist(ctx context.Context, req model.BuildRequest) (Response, error) {
@@ -617,6 +666,58 @@ type sourceAccumulator struct {
 	prices []float64
 }
 
+func choosePartBrand(acc *catalogAccumulator) string {
+	if acc == nil {
+		return "Generic"
+	}
+	if len(acc.brands) == 1 {
+		for brand := range acc.brands {
+			return brand
+		}
+	}
+	if acc.Brand != "" {
+		return acc.Brand
+	}
+	return "Mixed"
+}
+
+func summarizeCandidatesForPlatform(partID model.ID, platform model.SourcePlatform, candidates []normalizedCandidate, collectedAt time.Time) model.PartMarketSummary {
+	prices := make([]float64, 0, len(candidates))
+	latestPrice := 0.0
+	latestSeen := time.Time{}
+	for index, candidate := range candidates {
+		prices = append(prices, candidate.Product.Price)
+		seenAt := candidate.Product.LastSeenAt
+		if seenAt.IsZero() {
+			seenAt = candidate.Product.UpdatedAt
+		}
+		if seenAt.IsZero() {
+			seenAt = candidate.Product.CreatedAt
+		}
+		if seenAt.IsZero() {
+			seenAt = collectedAt.Add(time.Duration(index) * time.Millisecond)
+		}
+		if latestSeen.IsZero() || seenAt.After(latestSeen) {
+			latestSeen = seenAt
+			latestPrice = candidate.Product.Price
+		}
+	}
+	collectedAtCopy := collectedAt
+	return model.PartMarketSummary{
+		PartID:          partID,
+		SourcePlatform:  platform,
+		LatestPrice:     latestPrice,
+		MinPrice:        minPrice(prices),
+		MaxPrice:        maxPrice(prices),
+		MedianPrice:     medianPrice(prices),
+		P25Price:        percentilePrice(prices, 0.25),
+		P75Price:        percentilePrice(prices, 0.75),
+		SampleCount:     len(candidates),
+		WindowDays:      1,
+		LastCollectedAt: &collectedAtCopy,
+	}
+}
+
 func (c *catalogAccumulator) add(candidate normalizedCandidate) {
 	c.prices = append(c.prices, candidate.Product.Price)
 	if candidate.Brand != "" {
@@ -713,6 +814,29 @@ func maxPrice(prices []float64) float64 {
 		}
 	}
 	return maximum
+}
+
+func percentilePrice(prices []float64, percentile float64) float64 {
+	if len(prices) == 0 {
+		return 0
+	}
+	if percentile <= 0 {
+		return minPrice(prices)
+	}
+	if percentile >= 1 {
+		return maxPrice(prices)
+	}
+	sortedPrices := append([]float64(nil), prices...)
+	sort.Float64s(sortedPrices)
+	position := percentile * float64(len(sortedPrices)-1)
+	lowerIndex := int(math.Floor(position))
+	upperIndex := int(math.Ceil(position))
+	if lowerIndex == upperIndex {
+		return sortedPrices[lowerIndex]
+	}
+	weight := position - float64(lowerIndex)
+	value := sortedPrices[lowerIndex] + (sortedPrices[upperIndex]-sortedPrices[lowerIndex])*weight
+	return math.Round(value*100) / 100
 }
 
 func categoryOrder(category model.PartCategory) int {

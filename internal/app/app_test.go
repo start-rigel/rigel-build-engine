@@ -30,6 +30,9 @@ func (r *memoryRepo) EnsurePart(_ context.Context, part model.Part) (model.Part,
 func (r *memoryRepo) UpsertProductMapping(_ context.Context, _ model.ProductPartMapping) error {
 	return nil
 }
+func (r *memoryRepo) UpsertPartMarketSummary(_ context.Context, _ model.PartMarketSummary) error {
+	return nil
+}
 func (r *memoryRepo) CreateBuildRequest(_ context.Context, req model.BuildRequest) (model.BuildRequest, error) {
 	req.ID = "request-1"
 	r.request = req

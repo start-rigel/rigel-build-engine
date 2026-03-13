@@ -27,6 +27,7 @@ Transitioning from early MVP build-generation logic toward a price-catalog-cente
 - historical mock products are excluded from the price catalog
 - RAM titles now collapse into generic canonical forms such as `DDR5 6000 32G`
 - CPU, GPU, and SSD titles now also collapse into tighter model-level forms such as `Ryzen 7500F`, `RTX 4060`, and `SN770 1TB NVMe`
+- generating the catalog now also upserts `parts`, `product_part_mapping`, and daily `part_market_summary` rows
 
 ## Routes
 
