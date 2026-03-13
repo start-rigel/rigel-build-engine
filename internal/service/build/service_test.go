@@ -283,6 +283,66 @@ func TestGeneratePriceCatalogAggregatesRealProducts(t *testing.T) {
 	}
 }
 
+func TestGeneratePriceCatalogCanonicalizesCPUGPUSSD(t *testing.T) {
+	repo := newMemoryRepo()
+	service := New(repo, func() time.Time {
+		return time.Date(2026, 3, 13, 10, 0, 0, 0, time.UTC)
+	})
+
+	repoProducts := []model.Product{
+		{ID: "cpu-1", SourcePlatform: model.PlatformJD, Title: "AMD 锐龙 Ryzen 5 7500F 盒装处理器", Price: 899, Availability: "in_stock", Attributes: map[string]any{"category": "CPU"}},
+		{ID: "cpu-2", SourcePlatform: model.PlatformGoofish, Title: "散片 R5 7500F 自用出", Price: 760, Availability: "in_stock", Attributes: map[string]any{"category": "CPU"}},
+		{ID: "gpu-1", SourcePlatform: model.PlatformJD, Title: "七彩虹 GeForce RTX4060 8G 显卡", Price: 2199, Availability: "in_stock", Attributes: map[string]any{"category": "GPU"}},
+		{ID: "gpu-2", SourcePlatform: model.PlatformGoofish, Title: "华硕 RTX 4060 8G 成色新", Price: 1850, Availability: "in_stock", Attributes: map[string]any{"category": "GPU"}},
+		{ID: "ssd-1", SourcePlatform: model.PlatformJD, Title: "WD SN770 1TB NVMe 固态硬盘", Price: 429, Availability: "in_stock", Attributes: map[string]any{"category": "SSD"}},
+		{ID: "ssd-2", SourcePlatform: model.PlatformGoofish, Title: "西数 sn770 1tb nvme 自用", Price: 320, Availability: "in_stock", Attributes: map[string]any{"category": "SSD"}},
+	}
+	repo.ListProductsFunc = func(_ context.Context, _ []model.SourcePlatform, _ int) ([]model.Product, error) {
+		return repoProducts, nil
+	}
+
+	response, err := service.GeneratePriceCatalog(context.Background(), CatalogRequest{
+		UseCase:   model.UseCaseGaming,
+		BuildMode: model.ModeMixed,
+		Limit:     20,
+	})
+	if err != nil {
+		t.Fatalf("GeneratePriceCatalog() error = %v", err)
+	}
+	if len(response.Items) != 3 {
+		t.Fatalf("expected 3 aggregated catalog items, got %d", len(response.Items))
+	}
+
+	index := map[string]PriceCatalogItem{}
+	for _, item := range response.Items {
+		index[item.NormalizedKey] = item
+	}
+
+	cpuItem, ok := index["cpu-ryzen-7500f"]
+	if !ok {
+		t.Fatalf("expected canonical CPU key cpu-ryzen-7500f, got %#v", response.Items)
+	}
+	if cpuItem.SampleCount != 2 {
+		t.Fatalf("expected CPU sample count 2, got %d", cpuItem.SampleCount)
+	}
+
+	gpuItem, ok := index["gpu-rtx-4060"]
+	if !ok {
+		t.Fatalf("expected canonical GPU key gpu-rtx-4060, got %#v", response.Items)
+	}
+	if gpuItem.SampleCount != 2 {
+		t.Fatalf("expected GPU sample count 2, got %d", gpuItem.SampleCount)
+	}
+
+	ssdItem, ok := index["ssd-sn770-1tb-nvme"]
+	if !ok {
+		t.Fatalf("expected canonical SSD key ssd-sn770-1tb-nvme, got %#v", response.Items)
+	}
+	if ssdItem.SampleCount != 2 {
+		t.Fatalf("expected SSD sample count 2, got %d", ssdItem.SampleCount)
+	}
+}
+
 func TestSelectBuildRealignsRAMAfterBudgetRebalance(t *testing.T) {
 	grouped := map[model.PartCategory][]normalizedCandidate{
 		model.CategoryCPU: {

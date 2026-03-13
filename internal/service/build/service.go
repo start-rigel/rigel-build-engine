@@ -57,9 +57,20 @@ type selectionProfile struct {
 }
 
 var (
-	wattRegexp     = regexp.MustCompile(`(?i)(\d{3,4})\s*w`)
-	speedRegexp    = regexp.MustCompile(`(?i)\b(3200|3600|4800|5200|5600|6000|6400|6800)\b`)
-	capacityRegexp = regexp.MustCompile(`(?i)(\d+)\s*gb`)
+	wattRegexp            = regexp.MustCompile(`(?i)(\d{3,4})\s*w`)
+	speedRegexp           = regexp.MustCompile(`(?i)\b(3200|3600|4800|5200|5600|6000|6400|6800)\b`)
+	capacityRegexp        = regexp.MustCompile(`(?i)(\d+)\s*gb`)
+	storageCapacityRegexp = regexp.MustCompile(`(?i)\b(\d+)\s*(tb|gb)\b`)
+	intelCPURegexp        = regexp.MustCompile(`(?i)\b(i[3579][ -]?\d{4,5}[a-z]{0,2})\b`)
+	amdCPURegexp          = regexp.MustCompile(`(?i)\b(?:ryzen\s*[3579]\s*|r[3579]\s*)?(\d{4,5}(?:x3d|[a-z]{0,2}))\b`)
+	rtxGPURegexp          = regexp.MustCompile(`(?i)\b(rtx\s*40\d{2}(?:\s*ti)?(?:\s*super)?)\b`)
+	rxGPURegexp           = regexp.MustCompile(`(?i)\b(rx\s*\d{4}(?:\s*xt)?)\b`)
+	snSSDRegexp           = regexp.MustCompile(`(?i)\b(sn\d{3,4})\b`)
+	evoSSDRegexp          = regexp.MustCompile(`(?i)\b(9[89]0\s*evo|9[89]0\s*pro)\b`)
+	nmSSDRegexp           = regexp.MustCompile(`(?i)\b(nm\d{3})\b`)
+	mpSSDRegexp           = regexp.MustCompile(`(?i)\b(mp44l)\b`)
+	t500SSDRegexp         = regexp.MustCompile(`(?i)\b(t500)\b`)
+	p3PlusSSDRegexp       = regexp.MustCompile(`(?i)\b(p3\s*plus)\b`)
 )
 
 const shopTypeSelfOperated = model.ShopType("self_operated")
@@ -990,6 +1001,10 @@ func inferModel(title, brand string) string {
 
 func inferCanonicalModel(category model.PartCategory, title, brand string, useCase model.UseCase) string {
 	switch category {
+	case model.CategoryCPU:
+		return inferCanonicalCPUModel(title, brand)
+	case model.CategoryGPU:
+		return inferCanonicalGPUModel(title, brand)
 	case model.CategoryRAM:
 		memoryType := inferMemoryType(category, title, useCase)
 		speed := ""
@@ -1003,8 +1018,80 @@ func inferCanonicalModel(category model.PartCategory, title, brand string, useCa
 		if memoryType != "" && speed != "" && capacity != "" {
 			return fmt.Sprintf("%s %s %sG", memoryType, speed, capacity)
 		}
+	case model.CategorySSD:
+		return inferCanonicalSSDModel(title)
 	}
 	return inferModel(title, brand)
+}
+
+func inferCanonicalCPUModel(title, brand string) string {
+	lower := strings.ToLower(title)
+	if match := intelCPURegexp.FindStringSubmatch(lower); len(match) == 2 {
+		modelName := strings.ToUpper(strings.ReplaceAll(match[1], " ", ""))
+		modelName = strings.ReplaceAll(modelName, "I", "i")
+		return "Core " + strings.ReplaceAll(modelName, "-", "-")
+	}
+	if match := amdCPURegexp.FindStringSubmatch(lower); len(match) == 2 {
+		modelName := strings.ToUpper(strings.TrimSpace(match[1]))
+		if strings.HasPrefix(modelName, "7") || strings.HasPrefix(modelName, "8") || strings.HasPrefix(modelName, "9") {
+			return "Ryzen " + modelName
+		}
+		return "Ryzen " + modelName
+	}
+	return inferModel(title, brand)
+}
+
+func inferCanonicalGPUModel(title, brand string) string {
+	lower := strings.ToLower(title)
+	if match := rtxGPURegexp.FindStringSubmatch(lower); len(match) == 2 {
+		return normalizeRTXModel(match[1])
+	}
+	if match := rxGPURegexp.FindStringSubmatch(lower); len(match) == 2 {
+		return strings.ToUpper(strings.Join(strings.Fields(match[1]), " "))
+	}
+	return inferModel(title, brand)
+}
+
+func normalizeRTXModel(value string) string {
+	upper := strings.ToUpper(strings.Join(strings.Fields(value), " "))
+	upper = strings.ReplaceAll(upper, "RTX", "RTX ")
+	upper = strings.ReplaceAll(upper, "  ", " ")
+	upper = strings.ReplaceAll(upper, "TI", "Ti")
+	upper = strings.ReplaceAll(upper, "SUPER", "SUPER")
+	return strings.TrimSpace(upper)
+}
+
+func inferCanonicalSSDModel(title string) string {
+	lower := strings.ToLower(title)
+	modelName := ""
+	for _, regexpItem := range []*regexp.Regexp{snSSDRegexp, evoSSDRegexp, nmSSDRegexp, mpSSDRegexp, t500SSDRegexp, p3PlusSSDRegexp} {
+		if match := regexpItem.FindStringSubmatch(lower); len(match) == 2 {
+			modelName = strings.ToUpper(strings.Join(strings.Fields(match[1]), " "))
+			break
+		}
+	}
+	capacity := ""
+	if match := storageCapacityRegexp.FindStringSubmatch(lower); len(match) == 3 {
+		capacity = strings.ToUpper(match[1] + match[2])
+	}
+	if strings.Contains(lower, "nvme") {
+		if modelName != "" && capacity != "" {
+			return fmt.Sprintf("%s %s NVMe", modelName, capacity)
+		}
+		if capacity != "" {
+			return fmt.Sprintf("%s NVMe SSD", capacity)
+		}
+	}
+	if modelName != "" && capacity != "" {
+		return fmt.Sprintf("%s %s", modelName, capacity)
+	}
+	if capacity != "" {
+		return fmt.Sprintf("%s SSD", capacity)
+	}
+	if modelName != "" {
+		return modelName
+	}
+	return inferModel(title, "SSD")
 }
 
 func inferPlatformFamily(category model.PartCategory, title string, useCase model.UseCase) string {
