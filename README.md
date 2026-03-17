@@ -12,7 +12,7 @@ Transitioning from early MVP build-generation logic toward a price-catalog-cente
 
 ## Intended Role
 
-- read collected JD and Goofish product samples from PostgreSQL
+- read collected JD product samples from PostgreSQL
 - normalize raw titles into canonical categories, brands, and models
 - map products into canonical parts
 - aggregate daily prices per canonical model
@@ -51,6 +51,5 @@ curl -X POST http://localhost:18082/api/v1/builds/generate \
 
 ## TODO / MOCK
 
-- TODO: persist canonical daily summaries into `part_market_summary`
 - TODO: expose a cleaner AI-facing payload contract centered on the price catalog
 - TODO: reduce remaining dependence on starter fallback data over time
