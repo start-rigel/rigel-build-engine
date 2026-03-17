@@ -1,6 +1,6 @@
 # rigel-build-engine
 
-Build engine for canonical model normalization, daily price aggregation, and minimal hard compatibility checks.
+Build engine for canonical model normalization, daily price aggregation, recommendation generation, and minimal hard compatibility checks.
 
 ## Language
 
@@ -16,13 +16,15 @@ Transitioning from early MVP build-generation logic toward a price-catalog-cente
 - normalize raw titles into canonical categories, brands, and models
 - map products into canonical parts
 - aggregate daily prices per canonical model
-- provide a clean price catalog for AI consumption
+- generate recommendation and explanation output directly from structured build results and the price catalog
 - keep only minimal hard checks that should not be left entirely to AI
 
 ## Implemented
 
 - current build-generation endpoints are still available
 - `GET /api/v1/catalog/prices` returns an AI-ready aggregated price catalog
+- `POST /api/v1/advice/generate` now explains structured build results inside build-engine
+- `POST /api/v1/advice/catalog` now generates catalog-based recommendation drafts inside build-engine
 - price catalog groups samples by canonical model key instead of raw product title
 - historical mock products are excluded from the price catalog
 - RAM titles now collapse into generic canonical forms such as `DDR5 6000 32G`
@@ -33,6 +35,8 @@ Transitioning from early MVP build-generation logic toward a price-catalog-cente
 
 - `GET /healthz`
 - `GET /api/v1/catalog/prices`
+- `POST /api/v1/advice/generate`
+- `POST /api/v1/advice/catalog`
 - `POST /api/v1/builds/generate`
 - `GET /api/v1/builds/{id}`
 - `GET /api/v1/parts/search`
@@ -51,5 +55,4 @@ curl -X POST http://localhost:18082/api/v1/builds/generate \
 
 ## TODO / MOCK
 
-- TODO: expose a cleaner AI-facing payload contract centered on the price catalog
 - TODO: reduce remaining dependence on starter fallback data over time
