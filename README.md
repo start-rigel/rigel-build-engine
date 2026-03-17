@@ -1,6 +1,6 @@
 # rigel-build-engine
 
-Build engine for canonical model normalization, daily price aggregation, recommendation generation, and minimal hard compatibility checks.
+Build engine for accepting UI-originated request parameters, organizing hardware price data, and producing recommendation analysis.
 
 ## Language
 
@@ -8,23 +8,24 @@ Go
 
 ## Current Stage
 
-Transitioning from early MVP build-generation logic toward a price-catalog-centered engine.
+Transitioning toward a UI-parameter-driven analysis engine centered on the current hardware price catalog.
 
 ## Intended Role
 
+- accept request parameters forwarded from `rigel-console`
 - read collected JD product samples from PostgreSQL
 - normalize raw titles into canonical categories, brands, and models
-- map products into canonical parts
-- aggregate daily prices per canonical model
-- generate recommendation and explanation output directly from structured build results and the price catalog
+- organize current hardware information into a structured price catalog
+- request AI API analysis using `budget + use case + organized hardware info`
+- return recommendation/explanation output to `rigel-console`
 - keep only minimal hard checks that should not be left entirely to AI
 
 ## Implemented
 
 - current build-generation endpoints are still available
 - `GET /api/v1/catalog/prices` returns an AI-ready aggregated price catalog
-- `POST /api/v1/advice/generate` now explains structured build results inside build-engine
-- `POST /api/v1/advice/catalog` now generates catalog-based recommendation drafts inside build-engine
+- `POST /api/v1/advice/generate` now returns recommendation analysis from inside build-engine
+- `POST /api/v1/advice/catalog` now returns catalog-based recommendation drafts from inside build-engine
 - price catalog groups samples by canonical model key instead of raw product title
 - historical mock products are excluded from the price catalog
 - RAM titles now collapse into generic canonical forms such as `DDR5 6000 32G`
@@ -55,4 +56,5 @@ curl -X POST http://localhost:18082/api/v1/builds/generate \
 
 ## TODO / MOCK
 
+- TODO: replace the current local template advice path with a real external AI API call
 - TODO: reduce remaining dependence on starter fallback data over time
