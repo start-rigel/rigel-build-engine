@@ -20,27 +20,6 @@ type Part struct {
 	AuditFields
 }
 
-// PartSpecs stores compatibility-relevant structured attributes.
-type PartSpecs struct {
-	ID             ID
-	PartID         ID
-	Socket         string
-	Chipset        string
-	MemoryType     string
-	MemorySlots    int
-	MemorySpeedMax int
-	FormFactor     string
-	PCIeSlot       string
-	PCIePowerPin   string
-	TDPWatt        int
-	PSUFormFactor  string
-	Wattage        int
-	CapacityGB     int
-	InterfaceType  string
-	Extra          map[string]any
-	AuditFields
-}
-
 // Product preserves raw marketplace information for later normalization.
 type Product struct {
 	ID             ID

@@ -18,13 +18,10 @@ Transitioning toward a UI-parameter-driven analysis engine centered on the curre
 - organize current hardware information into a structured price catalog
 - request AI API analysis using `budget + use case + organized hardware info`
 - return recommendation/explanation output to `rigel-console`
-- keep only minimal hard checks that should not be left entirely to AI
 
 ## Implemented
 
-- current build-generation endpoints are still available
 - `GET /api/v1/catalog/prices` returns an AI-ready aggregated price catalog
-- `POST /api/v1/advice/generate` now returns recommendation analysis from inside build-engine
 - `POST /api/v1/advice/catalog` now returns catalog-based recommendation drafts from inside build-engine
 - price catalog groups samples by canonical model key instead of raw product title
 - historical mock products are excluded from the price catalog
@@ -36,11 +33,7 @@ Transitioning toward a UI-parameter-driven analysis engine centered on the curre
 
 - `GET /healthz`
 - `GET /api/v1/catalog/prices`
-- `POST /api/v1/advice/generate`
 - `POST /api/v1/advice/catalog`
-- `POST /api/v1/builds/generate`
-- `GET /api/v1/builds/{id}`
-- `GET /api/v1/parts/search`
 
 ## Example Requests
 
@@ -48,13 +41,8 @@ Transitioning toward a UI-parameter-driven analysis engine centered on the curre
 curl "http://localhost:18082/api/v1/catalog/prices?use_case=gaming&build_mode=mixed&limit=500"
 ```
 
-```bash
-curl -X POST http://localhost:18082/api/v1/builds/generate \
-  -H 'Content-Type: application/json' \
-  -d '{"budget":6000,"use_case":"gaming","build_mode":"new_only"}'
-```
 
 ## TODO / MOCK
 
 - TODO: replace the current local template advice path with a real external AI API call
-- TODO: reduce remaining dependence on starter fallback data over time
+- TODO: tighten canonical title normalization for more JD part categories over time

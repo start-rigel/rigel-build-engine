@@ -15,20 +15,6 @@ type Advice struct {
 	AlternativeNote string   `json:"alternative_note"`
 }
 
-// GenerateRequest asks the service to explain a structured build result.
-type GenerateRequest struct {
-	Build buildservice.Response `json:"build"`
-}
-
-// GenerateResponse is returned for build-result-based advice.
-type GenerateResponse struct {
-	BuildRequestID string `json:"build_request_id"`
-	ResultID       string `json:"result_id"`
-	Provider       string `json:"provider"`
-	FallbackUsed   bool   `json:"fallback_used"`
-	Advisory       Advice `json:"advisory"`
-}
-
 // GenerateCatalogRequest asks the service to produce a recommendation draft from a price catalog.
 type GenerateCatalogRequest struct {
 	Budget    float64                           `json:"budget"`
