@@ -1,48 +1,66 @@
 # rigel-build-engine
 
-Build engine for accepting UI-originated request parameters, organizing hardware price data, and producing recommendation analysis.
+`rigel-build-engine` 是当前系统的核心分析服务。
 
-## Language
+## 当前职责
 
-Go
+- 接收来自界面的用户参数
+- 读取京东原始硬件数据
+- 整理出型号级价格清单
+- 构造 AI 输入
+- 请求 AI API
+- 返回结构化推荐结果
 
-## Current Stage
+## 不负责什么
 
-Transitioning toward a UI-parameter-driven analysis engine centered on the current hardware price catalog.
+- 不直接抓取京东或其他平台
+- 不承担前端页面
+- 当前不做复杂规则引擎
 
-## Intended Role
+## 当前输入
 
-- accept request parameters forwarded from `rigel-console`
-- read collected JD product samples from PostgreSQL
-- normalize raw titles into canonical categories, brands, and models
-- organize current hardware information into a structured price catalog
-- request AI API analysis using `budget + use case + organized hardware info`
-- return recommendation/explanation output to `rigel-console`
+### 1. 用户需求
 
-## Implemented
+- `budget`
+- `usage`
+- `brand_preference`
+- `special_requirements`
+- `notes`
 
-- `GET /api/v1/catalog/prices` returns an AI-ready aggregated price catalog
-- `POST /api/v1/advice/catalog` now returns catalog-based recommendation drafts from inside build-engine
-- price catalog groups samples by canonical model key instead of raw product title
-- historical mock products are excluded from the price catalog
-- RAM titles now collapse into generic canonical forms such as `DDR5 6000 32G`
-- CPU, GPU, and SSD titles now also collapse into tighter model-level forms such as `Ryzen 7500F`, `RTX 4060`, and `SN770 1TB NVMe`
-- generating the catalog now also upserts `parts`, `product_part_mapping`, and daily `part_market_summary` rows
+### 2. 当前硬件价格信息
 
-## Routes
+来源于 `rigel-jd-collector` 已入库的原始商品。
+
+build-engine 会将这些原始商品整理成型号级价格清单，再作为 AI 输入的一部分。
+
+## 当前输出
+
+当前输出是结构化推荐结果，至少包含：
+
+- `summary`
+- `parts`
+- `total_price`
+- `reasoning`
+- `alternatives`
+- `warnings`
+
+## 当前接口
 
 - `GET /healthz`
 - `GET /api/v1/catalog/prices`
 - `POST /api/v1/advice/catalog`
 
-## Example Requests
+## 当前重点
 
-```bash
-curl "http://localhost:18082/api/v1/catalog/prices?use_case=gaming&build_mode=mixed&limit=500"
-```
+当前重点不是复杂兼容规则。
+当前重点是：
 
+1. 把原始商品整理成 AI 可用的型号级价格清单
+2. 把 `用户需求 + 价格清单` 稳定交给 AI
+3. 返回统一格式的推荐结果
 
 ## TODO / MOCK
 
-- TODO: replace the current local template advice path with a real external AI API call
-- TODO: tighten canonical title normalization for more JD part categories over time
+- `TODO`: 接入真实外部 AI API
+- `TODO`: 继续收紧型号归一规则
+- `MOCK`: 当前仍可保留本地模板化分析作为过渡实现
