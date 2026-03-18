@@ -6,7 +6,7 @@
 
 - 接收来自界面的用户参数
 - 读取京东原始硬件数据
-- 整理出型号级价格清单
+- 按型号词库整理出型号级价格清单
 - 构造 AI 输入
 - 请求 AI API
 - 返回结构化推荐结果
@@ -33,6 +33,42 @@
 
 build-engine 会将这些原始商品整理成型号级价格清单，再作为 AI 输入的一部分。
 
+## 当前 AI 输入规范
+
+### `user_request`
+
+必须包含：
+
+- `budget`
+- `usage`
+
+可选包含：
+
+- `brand_preference`
+- `special_requirements`
+- `notes`
+
+### `price_catalog`
+
+按以下类别分组：
+
+- `cpu`
+- `gpu`
+- `motherboard`
+- `ram`
+- `ssd`
+- `psu`
+- `case`
+- `cooler`
+
+每个型号对象包含：
+
+- `model`
+- `price`
+- `price_min`
+- `price_max`
+- `sample_count`
+
 ## 当前输出
 
 当前输出是结构化推荐结果，至少包含：
@@ -43,6 +79,13 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 - `reasoning`
 - `alternatives`
 - `warnings`
+
+`parts` 每项必须包含：
+
+- `category`
+- `model`
+- `price`
+- `reason`
 
 ## 当前接口
 
@@ -63,4 +106,5 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 
 - `TODO`: 接入真实外部 AI API
 - `TODO`: 继续收紧型号归一规则
+- `TODO`: 与 `rigel_keyword_seeds` 形成稳定映射关系
 - `MOCK`: 当前仍可保留本地模板化分析作为过渡实现
