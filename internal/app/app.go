@@ -13,13 +13,15 @@ import (
 )
 
 type App struct {
-	cfg     config.Config
-	builder *buildservice.Service
-	advisor *adviceservice.Service
+	cfg         config.Config
+	builder     *buildservice.Service
+	advisor     *adviceservice.Service
+	adviceSlots chan struct{}
 }
 
 func New(cfg config.Config, builder *buildservice.Service, advisor *adviceservice.Service) *App {
-	return &App{cfg: cfg, builder: builder, advisor: advisor}
+	slots := make(chan struct{}, max(1, cfg.AdviceMaxConcurrency))
+	return &App{cfg: cfg, builder: builder, advisor: advisor, adviceSlots: slots}
 }
 
 func (a *App) Handler() http.Handler {
@@ -52,9 +54,20 @@ func (a *App) handleGenerateCatalogAdvice(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	if !a.authorized(r) {
+		writeError(w, http.StatusUnauthorized, "unauthorized service request")
+		return
+	}
 	var req adviceservice.GenerateCatalogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	select {
+	case a.adviceSlots <- struct{}{}:
+		defer func() { <-a.adviceSlots }()
+	default:
+		writeError(w, http.StatusTooManyRequests, "advice concurrency limit reached")
 		return
 	}
 	response, err := a.advisor.GenerateFromCatalog(req)
@@ -68,6 +81,10 @@ func (a *App) handleGenerateCatalogAdvice(w http.ResponseWriter, r *http.Request
 func (a *App) handleCatalogPrices(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !a.authorized(r) {
+		writeError(w, http.StatusUnauthorized, "unauthorized service request")
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -93,4 +110,18 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func (a *App) authorized(r *http.Request) bool {
+	if a.cfg.InternalServiceToken == "" {
+		return true
+	}
+	return strings.TrimSpace(r.Header.Get("X-Rigel-Service-Token")) == a.cfg.InternalServiceToken
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

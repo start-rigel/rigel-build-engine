@@ -240,19 +240,33 @@
 - `GET /api/v1/catalog/prices`
 - `POST /api/v1/advice/catalog`
 
+说明：
+
+- `GET /api/v1/catalog/prices`
+- `POST /api/v1/advice/catalog`
+
+这两个内部接口当前默认要求携带：
+
+- `X-Rigel-Service-Token`
+
+用于限制只有 `rigel-console` 或其他受信内部调用方才能触发价格目录聚合与 AI 建议生成。
+
 ## 配置方式
 
-当前服务默认读取：
-
-```text
-configs/config.yaml
-```
+当前服务通过环境变量读取配置。
 
 启动示例：
 
 ```bash
-go run ./cmd/server -config ./configs/config.yaml
+RIGEL_POSTGRES_DSN='postgres://rigel:rigel@localhost:5432/rigel?sslmode=disable' \
+RIGEL_INTERNAL_SERVICE_TOKEN='change-me-in-production' \
+go run ./cmd/server
 ```
+
+关键安全配置：
+
+- `RIGEL_INTERNAL_SERVICE_TOKEN`
+- `RIGEL_ADVICE_MAX_CONCURRENCY`
 
 ## 接口示例
 
@@ -279,7 +293,8 @@ curl http://localhost:18082/healthz
 请求：
 
 ```bash
-curl "http://localhost:18082/api/v1/catalog/prices?use_case=gaming&build_mode=mixed&limit=20"
+curl "http://localhost:18082/api/v1/catalog/prices?use_case=gaming&build_mode=mixed&limit=20" \
+  -H "X-Rigel-Service-Token: change-me-in-production"
 ```
 
 响应示例：
