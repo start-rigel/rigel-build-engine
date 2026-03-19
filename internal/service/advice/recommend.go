@@ -24,17 +24,10 @@ type ChatClient interface {
 }
 
 type aiOutput struct {
-	Summary    string   `json:"summary"`
-	Warnings   []string `json:"warnings"`
-	BuildItems []struct {
-		Category         string  `json:"category"`
-		TargetModel      string  `json:"target_model"`
-		SelectionReason  string  `json:"selection_reason"`
-		Confidence       float64 `json:"confidence"`
-		Reason           string  `json:"reason"`
-		SuggestedKeyword string  `json:"suggested_keyword"`
-	} `json:"build_items"`
-	Advice BuildAdviceDetail `json:"advice"`
+	Summary    string              `json:"summary"`
+	Warnings   []string            `json:"warnings"`
+	BuildItems []aiOutputBuildItem `json:"build_items"`
+	Advice     BuildAdviceDetail   `json:"advice"`
 }
 
 func (s *Service) GenerateBuildRecommendation(ctx context.Context, req BuildRecommendRequest, catalog buildservice.PriceCatalogResponse) (BuildRecommendResponse, error) {
@@ -112,20 +105,44 @@ func (s *Service) GenerateBuildRecommendation(ctx context.Context, req BuildReco
 	}
 
 	categoryCandidates := groupedCandidates(trimmedCatalog)
+	aiItems := map[model.PartCategory]aiOutputBuildItem{}
 	for _, item := range out.BuildItems {
 		category := model.PartCategory(strings.ToUpper(strings.TrimSpace(item.Category)))
 		if category == "" {
 			continue
 		}
+		if _, exists := aiItems[category]; exists {
+			continue
+		}
+		aiItems[category] = item
+	}
+	fallbackByCategory := map[model.PartCategory]CatalogRecommendationItem{}
+	for _, item := range selection.SelectedItems {
+		fallbackByCategory[item.Category] = item
+	}
+	for _, category := range requiredBuildCategories() {
+		item, hasAI := aiItems[category]
 		candidates := categoryCandidates[category]
 		buildItem := BuildItem{
-			Category:         category,
-			TargetModel:      strings.TrimSpace(item.TargetModel),
-			SelectionReason:  firstNonBlank(strings.TrimSpace(item.SelectionReason), "AI selected from current catalog"),
-			Confidence:       normalizeConfidence(item.Confidence),
-			Missing:          len(candidates) == 0,
-			Reason:           strings.TrimSpace(item.Reason),
-			SuggestedKeyword: strings.TrimSpace(item.SuggestedKeyword),
+			Category: category,
+			Missing:  len(candidates) == 0,
+		}
+		if hasAI {
+			buildItem.TargetModel = strings.TrimSpace(item.TargetModel)
+			buildItem.SelectionReason = firstNonBlank(strings.TrimSpace(item.SelectionReason), "AI selected from current catalog")
+			buildItem.Confidence = normalizeConfidence(item.Confidence)
+			buildItem.Reason = strings.TrimSpace(item.Reason)
+			buildItem.SuggestedKeyword = strings.TrimSpace(item.SuggestedKeyword)
+		} else if fallbackItem, ok := fallbackByCategory[category]; ok {
+			buildItem.TargetModel = strings.TrimSpace(fallbackItem.DisplayName)
+			buildItem.SelectionReason = "AI 未返回该类别，已使用目录候选补齐"
+			buildItem.Confidence = 0.6
+			buildItem.SuggestedKeyword = strings.TrimSpace(fallbackItem.DisplayName)
+		} else {
+			buildItem.SelectionReason = "AI 未返回该类别，且目录中无可用候选"
+			buildItem.Confidence = 0.5
+			buildItem.Reason = "catalog has no candidates for this category"
+			buildItem.Missing = true
 		}
 		buildItem.CandidateProducts = mapCandidates(candidates)
 		recommended := pickRecommended(candidates, buildItem.TargetModel)
@@ -133,6 +150,7 @@ func (s *Service) GenerateBuildRecommendation(ctx context.Context, req BuildReco
 			buildItem.RecommendedProduct = recommended
 			buildItem.PriceBasis = fmt.Sprintf("median %.0f / avg %.0f / samples %d", recommended.MinPrice+(recommended.MaxPrice-recommended.MinPrice)/2, recommended.Price, recommended.SampleCount)
 			result.EstimatedTotal += recommended.Price
+			buildItem.Missing = false
 		}
 		if buildItem.Missing {
 			result.WithinBudget = false
@@ -295,4 +313,26 @@ func normalizeConfidence(v float64) float64 {
 		return 1
 	}
 	return v
+}
+
+type aiOutputBuildItem struct {
+	Category         string  `json:"category"`
+	TargetModel      string  `json:"target_model"`
+	SelectionReason  string  `json:"selection_reason"`
+	Confidence       float64 `json:"confidence"`
+	Reason           string  `json:"reason"`
+	SuggestedKeyword string  `json:"suggested_keyword"`
+}
+
+func requiredBuildCategories() []model.PartCategory {
+	return []model.PartCategory{
+		model.CategoryCPU,
+		model.CategoryGPU,
+		model.CategoryMB,
+		model.CategoryRAM,
+		model.CategorySSD,
+		model.CategoryPSU,
+		model.CategoryCase,
+		model.CategoryCooler,
+	}
 }

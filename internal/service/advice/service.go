@@ -26,7 +26,7 @@ func (s *Service) BindSettings(provider SettingsProvider) {
 	s.settings = provider
 }
 
-func (s *Service) GenerateFromCatalog(payload GenerateCatalogRequest) (GenerateCatalogResponse, error) {
+func (s *Service) GenerateFromCatalog(ctx context.Context, payload GenerateCatalogRequest) (GenerateCatalogResponse, error) {
 	if payload.Budget <= 0 {
 		return GenerateCatalogResponse{}, fmt.Errorf("budget must be greater than 0")
 	}
@@ -38,7 +38,7 @@ func (s *Service) GenerateFromCatalog(payload GenerateCatalogRequest) (GenerateC
 	payload.UseCase = model.UseCase(useCase)
 	payload.BuildMode = model.BuildMode(buildMode)
 
-	recommend, err := s.GenerateBuildRecommendation(context.Background(), BuildRecommendRequest{
+	recommend, err := s.GenerateBuildRecommendation(ctx, BuildRecommendRequest{
 		Budget:    payload.Budget,
 		UseCase:   payload.UseCase,
 		BuildMode: payload.BuildMode,

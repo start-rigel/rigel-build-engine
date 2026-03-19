@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/rigel-labs/rigel-build-engine/internal/domain/model"
 	adviceservice "github.com/rigel-labs/rigel-build-engine/internal/service/advice"
 	buildservice "github.com/rigel-labs/rigel-build-engine/internal/service/build"
+	settingsservice "github.com/rigel-labs/rigel-build-engine/internal/service/settings"
 )
 
 type memoryRepo struct{}
@@ -27,6 +29,12 @@ func (r *memoryRepo) UpsertProductMapping(_ context.Context, _ model.ProductPart
 	return nil
 }
 func (r *memoryRepo) UpsertPartMarketSummary(_ context.Context, _ model.PartMarketSummary) error {
+	return nil
+}
+func (r *memoryRepo) GetSystemSetting(_ context.Context, _ string) (json.RawMessage, bool, error) {
+	return nil, false, nil
+}
+func (r *memoryRepo) UpsertSystemSetting(_ context.Context, _ string, _ json.RawMessage) error {
 	return nil
 }
 
@@ -60,6 +68,33 @@ func TestGenerateCatalogAdviceRoute(t *testing.T) {
 	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local"}, builder, adviceservice.New("build-engine"), nil)
 	body := []byte(`{"budget":6000,"use_case":"gaming","build_mode":"mixed","catalog":{"use_case":"gaming","build_mode":"mixed","items":[{"category":"CPU","display_name":"Ryzen 5 7500F","normalized_key":"cpu-ryzen-7500f","sample_count":5,"avg_price":920,"median_price":899},{"category":"GPU","display_name":"RTX 4060","normalized_key":"gpu-rtx-4060","sample_count":6,"avg_price":2410,"median_price":2399}]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/advice/catalog", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	application.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSystemSettingsRequireAdminToken(t *testing.T) {
+	repo := &memoryRepo{}
+	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
+	settings := settingsservice.New(repo, config.Config{AIModel: "openai/gpt-5.4-nano", AdminAPIToken: "token-123"})
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", AdminAPIToken: "token-123"}, builder, adviceservice.New("build-engine"), settings)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/settings/system", nil)
+	rec := httptest.NewRecorder()
+	application.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSystemSettingsWithAdminToken(t *testing.T) {
+	repo := &memoryRepo{}
+	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
+	settings := settingsservice.New(repo, config.Config{AIModel: "openai/gpt-5.4-nano", AdminAPIToken: "token-123"})
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", AdminAPIToken: "token-123"}, builder, adviceservice.New("build-engine"), settings)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/settings/system", nil)
+	req.Header.Set("X-Rigel-Admin-Token", "token-123")
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

@@ -64,7 +64,7 @@ func (a *App) handleGenerateCatalogAdvice(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	response, err := a.advisor.GenerateFromCatalog(req)
+	response, err := a.advisor.GenerateFromCatalog(r.Context(), req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -104,6 +104,9 @@ func (a *App) handleSystemSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, "settings service not configured")
 		return
 	}
+	if !a.requireBuildEngineAdminToken(w, r) {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		view, err := a.settings.GetView(r.Context())
@@ -131,6 +134,18 @@ func (a *App) handleSystemSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func (a *App) requireBuildEngineAdminToken(w http.ResponseWriter, r *http.Request) bool {
+	if strings.TrimSpace(a.cfg.AdminAPIToken) == "" {
+		writeError(w, http.StatusServiceUnavailable, "build-engine admin token is not configured")
+		return false
+	}
+	if strings.TrimSpace(r.Header.Get("X-Rigel-Admin-Token")) != strings.TrimSpace(a.cfg.AdminAPIToken) {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return false
+	}
+	return true
 }
 
 func (a *App) handleCatalogPrices(w http.ResponseWriter, r *http.Request) {

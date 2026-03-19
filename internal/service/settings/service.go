@@ -24,6 +24,15 @@ type Service struct {
 	defaultFrom config.Config
 }
 
+type aiRuntimeStored struct {
+	BaseURL        *string `json:"base_url"`
+	GatewayToken   *string `json:"gateway_token"`
+	APIToken       *string `json:"api_token"`
+	Model          *string `json:"model"`
+	TimeoutSeconds *int    `json:"timeout_seconds"`
+	Enabled        *bool   `json:"enabled"`
+}
+
 func New(repo Repository, cfg config.Config) *Service {
 	return &Service{repo: repo, defaultFrom: cfg}
 }
@@ -60,24 +69,26 @@ func (s *Service) GetEffective(ctx context.Context) (AIRuntime, CatalogAILimits,
 	if raw, ok, err := s.repo.GetSystemSetting(ctx, keyAIRuntime); err != nil {
 		return AIRuntime{}, CatalogAILimits{}, err
 	} else if ok && len(raw) > 0 {
-		var stored AIRuntime
+		var stored aiRuntimeStored
 		if err := json.Unmarshal(raw, &stored); err == nil {
-			if strings.TrimSpace(stored.BaseURL) != "" {
-				runtime.BaseURL = strings.TrimSpace(stored.BaseURL)
+			if stored.BaseURL != nil {
+				runtime.BaseURL = strings.TrimSpace(*stored.BaseURL)
 			}
-			if strings.TrimSpace(stored.GatewayToken) != "" {
-				runtime.GatewayToken = strings.TrimSpace(stored.GatewayToken)
+			if stored.GatewayToken != nil {
+				runtime.GatewayToken = strings.TrimSpace(*stored.GatewayToken)
 			}
-			if strings.TrimSpace(stored.APIToken) != "" {
-				runtime.APIToken = strings.TrimSpace(stored.APIToken)
+			if stored.APIToken != nil {
+				runtime.APIToken = strings.TrimSpace(*stored.APIToken)
 			}
-			if strings.TrimSpace(stored.Model) != "" {
-				runtime.Model = strings.TrimSpace(stored.Model)
+			if stored.Model != nil {
+				runtime.Model = strings.TrimSpace(*stored.Model)
 			}
-			if stored.TimeoutSeconds > 0 {
-				runtime.TimeoutSeconds = normalizeTimeout(stored.TimeoutSeconds)
+			if stored.TimeoutSeconds != nil && *stored.TimeoutSeconds > 0 {
+				runtime.TimeoutSeconds = normalizeTimeout(*stored.TimeoutSeconds)
 			}
-			runtime.Enabled = stored.Enabled
+			if stored.Enabled != nil {
+				runtime.Enabled = *stored.Enabled
+			}
 		}
 	}
 	if raw, ok, err := s.repo.GetSystemSetting(ctx, keyCatalogAILimit); err != nil {

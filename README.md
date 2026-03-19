@@ -252,6 +252,17 @@
 - `GET /healthz`
 - `GET /api/v1/catalog/prices`
 - `POST /api/v1/advice/catalog`
+- `POST /api/v1/recommend/build`
+- `GET /admin/api/v1/settings/system`（需 `X-Rigel-Admin-Token`）
+- `PUT /admin/api/v1/settings/system`（需 `X-Rigel-Admin-Token`）
+
+## AI 运行时设置
+
+- 新增 `rigel_system_settings` 表存储：
+  - `ai_runtime`
+  - `catalog_ai_limits`
+- `ai_runtime` 支持通过后台清空 token；数据库中的空字符串会覆盖环境变量，不会被 ENV 回填。
+- 鉴权：后台设置接口要求请求头 `X-Rigel-Admin-Token` 与环境变量 `RIGEL_BUILD_ENGINE_ADMIN_TOKEN` 一致。
 
 说明：
 

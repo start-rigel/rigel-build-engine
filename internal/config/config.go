@@ -19,6 +19,7 @@ type Config struct {
 	AIToken         string
 	AIModel         string
 	AITimeout       time.Duration
+	AdminAPIToken   string
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
 	IdleTimeout     time.Duration
@@ -57,6 +58,7 @@ func Load() (Config, error) {
 		AIToken:         stringFromEnv("RIGEL_AI_TOKEN", ""),
 		AIModel:         stringFromEnv("RIGEL_AI_MODEL", "openai/gpt-5.4-nano"),
 		AITimeout:       aiTimeout,
+		AdminAPIToken:   stringFromEnv("RIGEL_BUILD_ENGINE_ADMIN_TOKEN", ""),
 		ReadTimeout:     readTimeout,
 		WriteTimeout:    writeTimeout,
 		IdleTimeout:     idleTimeout,

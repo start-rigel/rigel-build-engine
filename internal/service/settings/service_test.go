@@ -68,3 +68,24 @@ func TestUpdateEmptyTokenDoesNotOverwrite(t *testing.T) {
 		t.Fatalf("token should remain unchanged, got %+v", runtime)
 	}
 }
+
+func TestGetEffectiveKeepsDatabaseClearedTokens(t *testing.T) {
+	repo := &memoryRepo{values: map[string]json.RawMessage{
+		keyAIRuntime:      json.RawMessage(`{"base_url":"https://db.example","gateway_token":"","api_token":"","model":"db-model","timeout_seconds":25,"enabled":true}`),
+		keyCatalogAILimit: json.RawMessage(`{"max_models_per_category":5}`),
+	}}
+	svc := New(repo, config.Config{
+		AIBaseURL:      "https://env.example",
+		AIGatewayToken: "env-g",
+		AIToken:        "env-a",
+		AIModel:        "env-model",
+		AITimeout:      20 * time.Second,
+	})
+	runtime, _, err := svc.GetEffective(context.Background())
+	if err != nil {
+		t.Fatalf("GetEffective() error = %v", err)
+	}
+	if runtime.GatewayToken != "" || runtime.APIToken != "" {
+		t.Fatalf("expected db cleared token to override env, got %+v", runtime)
+	}
+}
