@@ -52,7 +52,10 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 
 ### `price_catalog`
 
-按以下类别分组：
+当前实现不是按 `cpu` / `gpu` / `ram` 这些 key 做嵌套分组。
+当前实现是统一放在 `catalog.items` 扁平数组里，每个条目自己带 `category` 字段。
+
+`category` 当前允许值：
 
 - `cpu`
 - `gpu`
@@ -65,11 +68,47 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 
 每个型号对象包含：
 
+- `category`
 - `model`
-- `price`
+- `display_name`
+- `avg_price`
+- `median_price`
 - `price_min`
 - `price_max`
 - `sample_count`
+
+也就是说，当前正确示意应理解为：
+
+```json
+{
+  "catalog": {
+    "use_case": "gaming",
+    "build_mode": "mixed",
+    "items": [
+      {
+        "category": "CPU",
+        "model": "7500f",
+        "display_name": "AMD 7500f",
+        "avg_price": 899,
+        "median_price": 899,
+        "min_price": 859,
+        "max_price": 939,
+        "sample_count": 3
+      },
+      {
+        "category": "GPU",
+        "model": "rtx 4060",
+        "display_name": "NVIDIA rtx 4060",
+        "avg_price": 2399,
+        "median_price": 2399,
+        "min_price": 2299,
+        "max_price": 2499,
+        "sample_count": 4
+      }
+    ]
+  }
+}
+```
 
 ## 当前输出
 
@@ -100,6 +139,20 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 - `GET /healthz`
 - `GET /api/v1/catalog/prices`
 - `POST /api/v1/advice/catalog`
+
+## 配置方式
+
+当前服务默认读取：
+
+```text
+configs/config.yaml
+```
+
+启动示例：
+
+```bash
+go run ./cmd/server -config ./configs/config.yaml
+```
 
 ## 接口示例
 
