@@ -348,10 +348,8 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
     "budget": 6000,
     "use_case": "gaming",
     "build_mode": "mixed",
-    "catalog": {
-      "use_case": "gaming",
-      "build_mode": "mixed",
-      "items": [
+    "price_catalog": {
+      "cpu": [
         {
           "category": "CPU",
           "brand": "AMD",
@@ -366,6 +364,21 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
           "platforms": ["jd"]
         },
         {
+          "category": "CPU",
+          "brand": "AMD",
+          "model": "9600x",
+          "display_name": "AMD 9600x",
+          "normalized_key": "cpu-9600x",
+          "sample_count": 5,
+          "avg_price": 1499,
+          "median_price": 1499,
+          "min_price": 1439,
+          "max_price": 1569,
+          "platforms": ["jd"]
+        }
+      ],
+      "gpu": [
+        {
           "category": "GPU",
           "brand": "NVIDIA",
           "model": "rtx 4060",
@@ -378,6 +391,36 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
           "max_price": 2499,
           "platforms": ["jd"]
         },
+        {
+          "category": "GPU",
+          "brand": "NVIDIA",
+          "model": "rtx 4060 ti",
+          "display_name": "NVIDIA rtx 4060 ti",
+          "normalized_key": "gpu-rtx-4060-ti",
+          "sample_count": 3,
+          "avg_price": 3199,
+          "median_price": 3199,
+          "min_price": 3099,
+          "max_price": 3299,
+          "platforms": ["jd"]
+        }
+      ],
+      "motherboard": [
+        {
+          "category": "MOTHERBOARD",
+          "brand": "MSI",
+          "model": "b650m mortar wifi",
+          "display_name": "MSI b650m mortar wifi",
+          "normalized_key": "motherboard-b650m-mortar-wifi",
+          "sample_count": 4,
+          "avg_price": 899,
+          "median_price": 899,
+          "min_price": 859,
+          "max_price": 959,
+          "platforms": ["jd"]
+        }
+      ],
+      "ram": [
         {
           "category": "RAM",
           "brand": "Gloway",
@@ -392,6 +435,21 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
           "platforms": ["jd"]
         },
         {
+          "category": "RAM",
+          "brand": "KingBank",
+          "model": "ddr5 6400 32g",
+          "display_name": "KingBank ddr5 6400 32g",
+          "normalized_key": "ram-ddr5-6400-32g",
+          "sample_count": 3,
+          "avg_price": 599,
+          "median_price": 599,
+          "min_price": 569,
+          "max_price": 639,
+          "platforms": ["jd"]
+        }
+      ],
+      "ssd": [
+        {
           "category": "SSD",
           "brand": "WD",
           "model": "sn770 1tb",
@@ -403,11 +461,32 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
           "min_price": 379,
           "max_price": 419,
           "platforms": ["jd"]
+        },
+        {
+          "category": "SSD",
+          "brand": "Lexar",
+          "model": "nm790 1tb",
+          "display_name": "Lexar nm790 1tb",
+          "normalized_key": "ssd-nm790-1tb",
+          "sample_count": 4,
+          "avg_price": 459,
+          "median_price": 459,
+          "min_price": 429,
+          "max_price": 499,
+          "platforms": ["jd"]
         }
-      ]
+      ],
+      "psu": [],
+      "case": [],
+      "cooler": []
     }
   }'
 ```
+
+说明：
+
+- 上面这段是按 AI 候选目录理解方式展示的请求示例
+- 如果严格对应当前 HTTP 接口实现，仍然是 `catalog.items` 扁平数组结构
 
 响应示例：
 
