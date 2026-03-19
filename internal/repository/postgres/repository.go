@@ -47,7 +47,7 @@ func (r *Repository) ListProducts(ctx context.Context, platforms []model.SourceP
 SELECT id, source_platform::text, external_id, COALESCE(sku_id, ''), title, COALESCE(subtitle, ''), url,
        COALESCE(image_url, ''), COALESCE(shop_name, ''), COALESCE(shop_type::text, ''), COALESCE(seller_name, ''), COALESCE(region, ''),
        price, currency, availability, attributes, raw_payload, first_seen_at, last_seen_at, created_at, updated_at
-FROM products
+FROM rigel_products
 WHERE source_platform::text = ANY($1)
 ORDER BY updated_at DESC
 LIMIT $2`
@@ -109,7 +109,7 @@ func (r *Repository) EnsurePart(ctx context.Context, part model.Part) (model.Par
 	}
 
 	query := `
-INSERT INTO parts (category, brand, series, model, display_name, normalized_key, generation, msrp, release_year, lifecycle_status, source_confidence, alias_keywords)
+INSERT INTO rigel_parts (category, brand, series, model, display_name, normalized_key, generation, msrp, release_year, lifecycle_status, source_confidence, alias_keywords)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 ON CONFLICT (normalized_key)
 DO UPDATE SET brand = EXCLUDED.brand, series = EXCLUDED.series, model = EXCLUDED.model, display_name = EXCLUDED.display_name, updated_at = NOW()
@@ -137,7 +137,7 @@ RETURNING id, created_at, updated_at`
 
 func (r *Repository) UpsertProductMapping(ctx context.Context, mapping model.ProductPartMapping) error {
 	query := `
-INSERT INTO product_part_mapping (product_id, part_id, mapping_status, match_confidence, matched_by, candidate_display_name, reason)
+INSERT INTO rigel_product_part_mapping (product_id, part_id, mapping_status, match_confidence, matched_by, candidate_display_name, reason)
 VALUES ($1,$2,$3,$4,$5,$6,$7)
 ON CONFLICT (product_id)
 DO UPDATE SET part_id = EXCLUDED.part_id, mapping_status = EXCLUDED.mapping_status, match_confidence = EXCLUDED.match_confidence,
@@ -160,7 +160,7 @@ DO UPDATE SET part_id = EXCLUDED.part_id, mapping_status = EXCLUDED.mapping_stat
 
 func (r *Repository) UpsertPartMarketSummary(ctx context.Context, summary model.PartMarketSummary) error {
 	query := `
-INSERT INTO part_market_summary (part_id, source_platform, latest_price, min_price, max_price, median_price, p25_price, p75_price, sample_count, window_days, last_collected_at)
+INSERT INTO rigel_part_market_summary (part_id, source_platform, latest_price, min_price, max_price, median_price, p25_price, p75_price, sample_count, window_days, last_collected_at)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 ON CONFLICT (part_id, source_platform, window_days)
 DO UPDATE SET latest_price = EXCLUDED.latest_price,

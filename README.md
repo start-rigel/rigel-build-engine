@@ -7,6 +7,9 @@
 - 接收来自界面的用户参数
 - 读取京东原始硬件数据
 - 按型号词库整理出型号级价格清单
+- 将标准型号持久化到 `rigel_parts`
+- 将商品映射持久化到 `rigel_product_part_mapping`
+- 将价格汇总持久化到 `rigel_part_market_summary`
 - 构造 AI 输入
 - 请求 AI API
 - 返回结构化推荐结果
