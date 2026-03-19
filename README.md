@@ -96,6 +96,16 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
         "min_price": 859,
         "max_price": 939,
         "sample_count": 3
+      },
+      {
+        "category": "CPU",
+        "model": "9600x",
+        "display_name": "AMD 9600x",
+        "avg_price": 1499,
+        "median_price": 1499,
+        "min_price": 1439,
+        "max_price": 1569,
+        "sample_count": 5
       }
     ],
     "gpu": [
@@ -108,11 +118,84 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
         "min_price": 2299,
         "max_price": 2499,
         "sample_count": 4
+      },
+      {
+        "category": "GPU",
+        "model": "rtx 4060 ti",
+        "display_name": "NVIDIA rtx 4060 ti",
+        "avg_price": 3199,
+        "median_price": 3199,
+        "min_price": 3099,
+        "max_price": 3299,
+        "sample_count": 3
       }
     ],
-    "motherboard": [],
-    "ram": [],
-    "ssd": [],
+    "motherboard": [
+      {
+        "category": "MOTHERBOARD",
+        "model": "b650m",
+        "display_name": "MSI b650m mortar wifi",
+        "avg_price": 899,
+        "median_price": 899,
+        "min_price": 859,
+        "max_price": 959,
+        "sample_count": 4
+      },
+      {
+        "category": "MOTHERBOARD",
+        "model": "b650m",
+        "display_name": "ASRock b650m pro rs",
+        "avg_price": 769,
+        "median_price": 769,
+        "min_price": 729,
+        "max_price": 829,
+        "sample_count": 3
+      }
+    ],
+    "ram": [
+      {
+        "category": "RAM",
+        "model": "ddr5 6000 32g",
+        "display_name": "Gloway ddr5 6000 32g",
+        "avg_price": 509,
+        "median_price": 509,
+        "min_price": 459,
+        "max_price": 559,
+        "sample_count": 2
+      },
+      {
+        "category": "RAM",
+        "model": "ddr5 6400 32g",
+        "display_name": "KingBank ddr5 6400 32g",
+        "avg_price": 599,
+        "median_price": 599,
+        "min_price": 569,
+        "max_price": 639,
+        "sample_count": 3
+      }
+    ],
+    "ssd": [
+      {
+        "category": "SSD",
+        "model": "sn770 1tb",
+        "display_name": "WD sn770 1tb",
+        "avg_price": 399,
+        "median_price": 399,
+        "min_price": 379,
+        "max_price": 419,
+        "sample_count": 2
+      },
+      {
+        "category": "SSD",
+        "model": "nm790 1tb",
+        "display_name": "Lexar nm790 1tb",
+        "avg_price": 459,
+        "median_price": 459,
+        "min_price": 429,
+        "max_price": 499,
+        "sample_count": 4
+      }
+    ],
     "psu": [],
     "case": [],
     "cooler": []
