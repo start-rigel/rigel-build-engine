@@ -59,6 +59,9 @@ func Load() (Config, error) {
 	if cfg.PostgresDSN == "" {
 		return Config{}, fmt.Errorf("RIGEL_POSTGRES_DSN must not be empty")
 	}
+	if cfg.InternalServiceToken == "" {
+		return Config{}, fmt.Errorf("RIGEL_INTERNAL_SERVICE_TOKEN must not be empty")
+	}
 
 	return cfg, nil
 }

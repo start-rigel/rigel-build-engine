@@ -11,6 +11,13 @@
 - 请求 AI API
 - 返回结构化推荐结果
 
+## 当前安全边界
+
+- `rigel-build-engine` 按内网服务设计，不作为默认公网入口
+- `GET /api/v1/catalog/prices` 与 `POST /api/v1/advice/catalog` 都要求 `X-Rigel-Service-Token`
+- `RIGEL_INTERNAL_SERVICE_TOKEN` 现在是必填配置，缺失时服务启动失败
+- 高成本建议生成接口仍保留并发闸门，避免异常流量放大 AI 成本
+
 ## 不负责什么
 
 - 不直接抓取京东或其他平台

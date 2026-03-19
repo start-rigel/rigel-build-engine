@@ -113,9 +113,6 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func (a *App) authorized(r *http.Request) bool {
-	if a.cfg.InternalServiceToken == "" {
-		return true
-	}
 	return strings.TrimSpace(r.Header.Get("X-Rigel-Service-Token")) == a.cfg.InternalServiceToken
 }
 
