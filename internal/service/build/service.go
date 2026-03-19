@@ -91,32 +91,12 @@ func (s *Service) GeneratePriceCatalog(ctx context.Context, req CatalogRequest) 
 		return PriceCatalogResponse{}, err
 	}
 
-	aggregates := map[string]*catalogAccumulator{}
-	groupedCandidates := map[string][]normalizedCandidate{}
-	for _, product := range products {
-		if isMockProduct(product) {
-			continue
+	aggregates, groupedCandidates := aggregateProducts(products, req.UseCase, false)
+	if len(aggregates) == 0 && hasMockProducts(products) {
+		aggregates, groupedCandidates = aggregateProducts(products, req.UseCase, true)
+		if len(aggregates) > 0 {
+			warnings = append(warnings, "no real collected products found; falling back to mock JD samples for local catalog generation")
 		}
-		candidate, ok := normalizeProduct(product, req.UseCase)
-		if !ok {
-			continue
-		}
-		key := catalogGroupKey(candidate)
-		groupedCandidates[key] = append(groupedCandidates[key], candidate)
-		acc, ok := aggregates[key]
-		if !ok {
-			acc = &catalogAccumulator{
-				Category:      candidate.Category,
-				Brand:         candidate.Brand,
-				Model:         candidate.Model,
-				DisplayName:   catalogDisplayName(candidate.Category, candidate.Brand, candidate.Model),
-				NormalizedKey: key,
-				platforms:     map[model.SourcePlatform]*sourceAccumulator{},
-				brands:        map[string]struct{}{},
-			}
-			aggregates[key] = acc
-		}
-		acc.add(candidate)
 	}
 
 	response := PriceCatalogResponse{
@@ -143,6 +123,46 @@ func (s *Service) GeneratePriceCatalog(ctx context.Context, req CatalogRequest) 
 		return response.Items[i].DisplayName < response.Items[j].DisplayName
 	})
 	return response, nil
+}
+
+func aggregateProducts(products []model.Product, useCase model.UseCase, includeMock bool) (map[string]*catalogAccumulator, map[string][]normalizedCandidate) {
+	aggregates := map[string]*catalogAccumulator{}
+	groupedCandidates := map[string][]normalizedCandidate{}
+	for _, product := range products {
+		if !includeMock && isMockProduct(product) {
+			continue
+		}
+		candidate, ok := normalizeProduct(product, useCase)
+		if !ok {
+			continue
+		}
+		key := catalogGroupKey(candidate)
+		groupedCandidates[key] = append(groupedCandidates[key], candidate)
+		acc, ok := aggregates[key]
+		if !ok {
+			acc = &catalogAccumulator{
+				Category:      candidate.Category,
+				Brand:         candidate.Brand,
+				Model:         candidate.Model,
+				DisplayName:   catalogDisplayName(candidate.Category, candidate.Brand, candidate.Model),
+				NormalizedKey: key,
+				platforms:     map[model.SourcePlatform]*sourceAccumulator{},
+				brands:        map[string]struct{}{},
+			}
+			aggregates[key] = acc
+		}
+		acc.add(candidate)
+	}
+	return aggregates, groupedCandidates
+}
+
+func hasMockProducts(products []model.Product) bool {
+	for _, product := range products {
+		if isMockProduct(product) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) persistCatalogAggregate(ctx context.Context, acc *catalogAccumulator, candidates []normalizedCandidate) error {

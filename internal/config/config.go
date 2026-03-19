@@ -3,23 +3,25 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 )
 
 // Config contains the runtime contract for the build engine service.
 type Config struct {
-	ServiceName          string
-	HTTPPort             string
-	LogLevel             string
-	PostgresDSN          string
-	RedisAddr            string
-	BuildEngineMode      string
-	InternalServiceToken string
-	AdviceMaxConcurrency int
-	ReadTimeout          time.Duration
-	WriteTimeout         time.Duration
-	IdleTimeout          time.Duration
+	ServiceName     string
+	HTTPPort        string
+	LogLevel        string
+	PostgresDSN     string
+	RedisAddr       string
+	BuildEngineMode string
+	AIBaseURL       string
+	AIGatewayToken  string
+	AIToken         string
+	AIModel         string
+	AITimeout       time.Duration
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	IdleTimeout     time.Duration
 }
 
 // Load reads service configuration from environment variables.
@@ -38,19 +40,26 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	aiTimeout, err := durationFromEnv("RIGEL_AI_TIMEOUT", 25*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
-		ServiceName:          stringFromEnv("RIGEL_SERVICE_NAME", "rigel-build-engine"),
-		HTTPPort:             stringFromEnv("RIGEL_HTTP_PORT", stringFromEnv("RIGEL_BUILD_ENGINE_PORT", "8080")),
-		LogLevel:             stringFromEnv("RIGEL_LOG_LEVEL", "info"),
-		PostgresDSN:          stringFromEnv("RIGEL_POSTGRES_DSN", ""),
-		RedisAddr:            stringFromEnv("RIGEL_REDIS_ADDR", ""),
-		BuildEngineMode:      stringFromEnv("RIGEL_BUILD_ENGINE_MODE", "local"),
-		InternalServiceToken: stringFromEnv("RIGEL_INTERNAL_SERVICE_TOKEN", ""),
-		AdviceMaxConcurrency: intFromEnv("RIGEL_ADVICE_MAX_CONCURRENCY", 4),
-		ReadTimeout:          readTimeout,
-		WriteTimeout:         writeTimeout,
-		IdleTimeout:          idleTimeout,
+		ServiceName:     stringFromEnv("RIGEL_SERVICE_NAME", "rigel-build-engine"),
+		HTTPPort:        stringFromEnv("RIGEL_HTTP_PORT", stringFromEnv("RIGEL_BUILD_ENGINE_PORT", "8080")),
+		LogLevel:        stringFromEnv("RIGEL_LOG_LEVEL", "info"),
+		PostgresDSN:     stringFromEnv("RIGEL_POSTGRES_DSN", ""),
+		RedisAddr:       stringFromEnv("RIGEL_REDIS_ADDR", ""),
+		BuildEngineMode: stringFromEnv("RIGEL_BUILD_ENGINE_MODE", "local"),
+		AIBaseURL:       stringFromEnv("RIGEL_AI_BASE_URL", ""),
+		AIGatewayToken:  stringFromEnv("RIGEL_AI_GATEWAY_TOKEN", ""),
+		AIToken:         stringFromEnv("RIGEL_AI_TOKEN", ""),
+		AIModel:         stringFromEnv("RIGEL_AI_MODEL", "openai/gpt-5.4-nano"),
+		AITimeout:       aiTimeout,
+		ReadTimeout:     readTimeout,
+		WriteTimeout:    writeTimeout,
+		IdleTimeout:     idleTimeout,
 	}
 
 	if cfg.HTTPPort == "" {
@@ -58,9 +67,6 @@ func Load() (Config, error) {
 	}
 	if cfg.PostgresDSN == "" {
 		return Config{}, fmt.Errorf("RIGEL_POSTGRES_DSN must not be empty")
-	}
-	if cfg.InternalServiceToken == "" {
-		return Config{}, fmt.Errorf("RIGEL_INTERNAL_SERVICE_TOKEN must not be empty")
 	}
 
 	return cfg, nil
@@ -85,16 +91,4 @@ func durationFromEnv(key string, fallback time.Duration) (time.Duration, error) 
 	}
 
 	return parsed, nil
-}
-
-func intFromEnv(key string, fallback int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed <= 0 {
-		return fallback
-	}
-	return parsed
 }

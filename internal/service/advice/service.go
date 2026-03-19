@@ -1,6 +1,7 @@
 package advice
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -13,10 +14,16 @@ import (
 // Service keeps recommendation-expression logic inside build-engine.
 type Service struct {
 	providerName string
+	settings     SettingsProvider
+	chatClient   ChatClient
 }
 
 func New(providerName string) *Service {
-	return &Service{providerName: providerName}
+	return &Service{providerName: providerName, chatClient: NewHTTPChatClient()}
+}
+
+func (s *Service) BindSettings(provider SettingsProvider) {
+	s.settings = provider
 }
 
 func (s *Service) GenerateFromCatalog(payload GenerateCatalogRequest) (GenerateCatalogResponse, error) {
@@ -31,12 +38,28 @@ func (s *Service) GenerateFromCatalog(payload GenerateCatalogRequest) (GenerateC
 	payload.UseCase = model.UseCase(useCase)
 	payload.BuildMode = model.BuildMode(buildMode)
 
+	recommend, err := s.GenerateBuildRecommendation(context.Background(), BuildRecommendRequest{
+		Budget:    payload.Budget,
+		UseCase:   payload.UseCase,
+		BuildMode: payload.BuildMode,
+	}, payload.Catalog)
+	if err != nil {
+		return GenerateCatalogResponse{}, err
+	}
 	selection := selectCatalogItems(payload.Budget, payload.UseCase, payload.BuildMode, payload.Catalog)
+	advisory := Advice{
+		Summary:         recommend.Summary,
+		Reasons:         recommend.Advice.Reasons,
+		FitFor:          fitFor(selection.UseCase, findSelection(selection.SelectedItems, model.CategoryCPU).DisplayName, findSelection(selection.SelectedItems, model.CategoryGPU).DisplayName),
+		Risks:           recommend.Advice.Risks,
+		UpgradeAdvice:   recommend.Advice.UpgradeAdvice,
+		AlternativeNote: "如果你更看重品牌、静音或不同采购偏好，可以在同一份价格目录上再生成一版草案。",
+	}
 	return GenerateCatalogResponse{
-		Provider:     s.providerName,
-		FallbackUsed: true,
+		Provider:     recommend.Provider,
+		FallbackUsed: recommend.FallbackUsed,
 		Selection:    selection,
-		Advisory:     templateCatalogAdvisory(payload, selection),
+		Advisory:     advisory,
 	}, nil
 }
 

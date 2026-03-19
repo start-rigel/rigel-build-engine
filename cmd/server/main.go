@@ -14,6 +14,7 @@ import (
 	"github.com/rigel-labs/rigel-build-engine/internal/repository/postgres"
 	adviceservice "github.com/rigel-labs/rigel-build-engine/internal/service/advice"
 	buildservice "github.com/rigel-labs/rigel-build-engine/internal/service/build"
+	settingsservice "github.com/rigel-labs/rigel-build-engine/internal/service/settings"
 )
 
 func main() {
@@ -37,7 +38,9 @@ func main() {
 
 	builder := buildservice.New(repo, time.Now)
 	advisor := adviceservice.New("build-engine")
-	application := app.New(cfg, builder, advisor)
+	settings := settingsservice.New(repo, cfg)
+	advisor.BindSettings(settings)
+	application := app.New(cfg, builder, advisor, settings)
 	server := &http.Server{Addr: ":" + cfg.HTTPPort, Handler: application.Handler(), ReadTimeout: cfg.ReadTimeout, WriteTimeout: cfg.WriteTimeout, IdleTimeout: cfg.IdleTimeout}
 
 	go func() {

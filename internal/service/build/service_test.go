@@ -108,3 +108,29 @@ func TestGeneratePriceCatalogRejectsMockProducts(t *testing.T) {
 		t.Fatalf("expected 1 real catalog item, got %d", len(response.Items))
 	}
 }
+
+func TestGeneratePriceCatalogFallsBackToMockProductsWhenNoRealSamplesExist(t *testing.T) {
+	repo := newMemoryRepo()
+	repo.products = []model.Product{
+		{ID: "cpu-mock", SourcePlatform: model.PlatformJD, Title: "AMD Ryzen 5 7500F 盒装", Price: 899, Availability: "in_stock", Attributes: map[string]any{"category": "CPU"}, RawPayload: map[string]any{"mock": true}},
+		{ID: "gpu-mock", SourcePlatform: model.PlatformJD, Title: "NVIDIA RTX 4060 8G 京东自营", Price: 2399, Availability: "in_stock", Attributes: map[string]any{"category": "GPU"}, RawPayload: map[string]any{"mock": true}},
+	}
+	service := New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
+
+	response, err := service.GeneratePriceCatalog(context.Background(), CatalogRequest{UseCase: model.UseCaseGaming, BuildMode: model.ModeNewOnly, Limit: 20})
+	if err != nil {
+		t.Fatalf("GeneratePriceCatalog() error = %v", err)
+	}
+	if len(response.Items) != 2 {
+		t.Fatalf("expected 2 mock fallback catalog items, got %d", len(response.Items))
+	}
+	found := false
+	for _, warning := range response.Warnings {
+		if warning == "no real collected products found; falling back to mock JD samples for local catalog generation" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected mock fallback warning")
+	}
+}

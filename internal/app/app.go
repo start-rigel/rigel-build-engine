@@ -10,18 +10,18 @@ import (
 	"github.com/rigel-labs/rigel-build-engine/internal/domain/model"
 	adviceservice "github.com/rigel-labs/rigel-build-engine/internal/service/advice"
 	buildservice "github.com/rigel-labs/rigel-build-engine/internal/service/build"
+	settingsservice "github.com/rigel-labs/rigel-build-engine/internal/service/settings"
 )
 
 type App struct {
-	cfg         config.Config
-	builder     *buildservice.Service
-	advisor     *adviceservice.Service
-	adviceSlots chan struct{}
+	cfg      config.Config
+	builder  *buildservice.Service
+	advisor  *adviceservice.Service
+	settings *settingsservice.Service
 }
 
-func New(cfg config.Config, builder *buildservice.Service, advisor *adviceservice.Service) *App {
-	slots := make(chan struct{}, max(1, cfg.AdviceMaxConcurrency))
-	return &App{cfg: cfg, builder: builder, advisor: advisor, adviceSlots: slots}
+func New(cfg config.Config, builder *buildservice.Service, advisor *adviceservice.Service, settings *settingsservice.Service) *App {
+	return &App{cfg: cfg, builder: builder, advisor: advisor, settings: settings}
 }
 
 func (a *App) Handler() http.Handler {
@@ -29,6 +29,8 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/healthz", a.handleHealth)
 	mux.HandleFunc("/api/v1/catalog/prices", a.handleCatalogPrices)
 	mux.HandleFunc("/api/v1/advice/catalog", a.handleGenerateCatalogAdvice)
+	mux.HandleFunc("/api/v1/recommend/build", a.handleRecommendBuild)
+	mux.HandleFunc("/admin/api/v1/settings/system", a.handleSystemSettings)
 	mux.HandleFunc("/", a.handleIndex)
 	return mux
 }
@@ -45,6 +47,9 @@ func (a *App) handleIndex(w http.ResponseWriter, _ *http.Request) {
 			"GET /healthz",
 			"GET /api/v1/catalog/prices",
 			"POST /api/v1/advice/catalog",
+			"POST /api/v1/recommend/build",
+			"GET /admin/api/v1/settings/system",
+			"PUT /admin/api/v1/settings/system",
 		},
 	})
 }
@@ -54,20 +59,9 @@ func (a *App) handleGenerateCatalogAdvice(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if !a.authorized(r) {
-		writeError(w, http.StatusUnauthorized, "unauthorized service request")
-		return
-	}
 	var req adviceservice.GenerateCatalogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	select {
-	case a.adviceSlots <- struct{}{}:
-		defer func() { <-a.adviceSlots }()
-	default:
-		writeError(w, http.StatusTooManyRequests, "advice concurrency limit reached")
 		return
 	}
 	response, err := a.advisor.GenerateFromCatalog(req)
@@ -78,13 +72,70 @@ func (a *App) handleGenerateCatalogAdvice(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, response)
 }
 
-func (a *App) handleCatalogPrices(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+func (a *App) handleRecommendBuild(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if !a.authorized(r) {
-		writeError(w, http.StatusUnauthorized, "unauthorized service request")
+	var req adviceservice.BuildRecommendRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	catalog, err := a.builder.GeneratePriceCatalog(r.Context(), buildservice.CatalogRequest{
+		UseCase:   req.UseCase,
+		BuildMode: req.BuildMode,
+		Limit:     500,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response, err := a.advisor.GenerateBuildRecommendation(r.Context(), req, catalog)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (a *App) handleSystemSettings(w http.ResponseWriter, r *http.Request) {
+	if a.settings == nil {
+		writeError(w, http.StatusNotImplemented, "settings service not configured")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		view, err := a.settings.GetView(r.Context())
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, view)
+	case http.MethodPut:
+		var req settingsservice.UpdateSystemSettingsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+		if err := a.settings.Update(r.Context(), req); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		view, err := a.settings.GetView(r.Context())
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, view)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (a *App) handleCatalogPrices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -110,15 +161,4 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func (a *App) authorized(r *http.Request) bool {
-	return strings.TrimSpace(r.Header.Get("X-Rigel-Service-Token")) == a.cfg.InternalServiceToken
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

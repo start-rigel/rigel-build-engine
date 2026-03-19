@@ -192,6 +192,30 @@ DO UPDATE SET latest_price = EXCLUDED.latest_price,
 	return nil
 }
 
+func (r *Repository) GetSystemSetting(ctx context.Context, key string) (json.RawMessage, bool, error) {
+	const query = `SELECT value_json FROM rigel_system_settings WHERE setting_key = $1`
+	var raw []byte
+	if err := r.db.QueryRowContext(ctx, query, key).Scan(&raw); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("get system setting %s: %w", key, err)
+	}
+	return json.RawMessage(raw), true, nil
+}
+
+func (r *Repository) UpsertSystemSetting(ctx context.Context, key string, value json.RawMessage) error {
+	const query = `
+INSERT INTO rigel_system_settings (setting_key, value_json)
+VALUES ($1, $2::jsonb)
+ON CONFLICT (setting_key)
+DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()`
+	if _, err := r.db.ExecContext(ctx, query, key, string(value)); err != nil {
+		return fmt.Errorf("upsert system setting %s: %w", key, err)
+	}
+	return nil
+}
+
 func encodeJSON(value any) ([]byte, error) {
 	if value == nil {
 		return []byte(`{}`), nil

@@ -52,3 +52,57 @@ type GenerateCatalogResponse struct {
 	Selection    CatalogSelection `json:"selection"`
 	Advisory     Advice           `json:"advisory"`
 }
+
+type BuildRecommendRequest struct {
+	Budget    float64         `json:"budget"`
+	UseCase   model.UseCase   `json:"use_case"`
+	BuildMode model.BuildMode `json:"build_mode"`
+	Notes     string          `json:"notes,omitempty"`
+}
+
+type BuildRecommendResponse struct {
+	Provider       string            `json:"provider"`
+	FallbackUsed   bool              `json:"fallback_used"`
+	Request        BuildRequestEcho  `json:"request"`
+	Summary        string            `json:"summary"`
+	EstimatedTotal float64           `json:"estimated_total"`
+	WithinBudget   bool              `json:"within_budget"`
+	Warnings       []string          `json:"warnings,omitempty"`
+	BuildItems     []BuildItem       `json:"build_items"`
+	Advice         BuildAdviceDetail `json:"advice"`
+}
+
+type BuildRequestEcho struct {
+	Budget    float64         `json:"budget"`
+	UseCase   model.UseCase   `json:"use_case"`
+	BuildMode model.BuildMode `json:"build_mode"`
+	Notes     string          `json:"notes,omitempty"`
+}
+
+type BuildAdviceDetail struct {
+	Reasons       []string `json:"reasons"`
+	Risks         []string `json:"risks"`
+	UpgradeAdvice []string `json:"upgrade_advice"`
+}
+
+type ProductRef struct {
+	DisplayName string  `json:"display_name"`
+	Model       string  `json:"model"`
+	Price       float64 `json:"price"`
+	MinPrice    float64 `json:"min_price"`
+	MaxPrice    float64 `json:"max_price"`
+	SampleCount int     `json:"sample_count"`
+}
+
+type BuildItem struct {
+	Category           model.PartCategory `json:"category"`
+	TargetModel        string             `json:"target_model"`
+	SelectionReason    string             `json:"selection_reason"`
+	PriceBasis         string             `json:"price_basis"`
+	Confidence         float64            `json:"confidence"`
+	RecommendedProduct *ProductRef        `json:"recommended_product,omitempty"`
+	CandidateProducts  []ProductRef       `json:"candidate_products,omitempty"`
+	Missing            bool               `json:"missing"`
+	Reason             string             `json:"reason,omitempty"`
+	SuggestedKeyword   string             `json:"suggested_keyword,omitempty"`
+}
