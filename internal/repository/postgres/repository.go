@@ -160,9 +160,9 @@ DO UPDATE SET part_id = EXCLUDED.part_id, mapping_status = EXCLUDED.mapping_stat
 
 func (r *Repository) UpsertPartMarketSummary(ctx context.Context, summary model.PartMarketSummary) error {
 	query := `
-INSERT INTO rigel_part_market_summary (part_id, source_platform, latest_price, min_price, max_price, median_price, p25_price, p75_price, sample_count, window_days, last_collected_at)
+INSERT INTO rigel_part_market_summary (part_id, source_platform, snapshot_date, latest_price, min_price, max_price, median_price, p25_price, p75_price, sample_count, last_collected_at)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-ON CONFLICT (part_id, source_platform, window_days)
+ON CONFLICT (part_id, source_platform, snapshot_date)
 DO UPDATE SET latest_price = EXCLUDED.latest_price,
               min_price = EXCLUDED.min_price,
               max_price = EXCLUDED.max_price,
@@ -177,6 +177,7 @@ DO UPDATE SET latest_price = EXCLUDED.latest_price,
 		query,
 		summary.PartID,
 		summary.SourcePlatform,
+		summary.SnapshotDate,
 		nullableFloat(summary.LatestPrice),
 		nullableFloat(summary.MinPrice),
 		nullableFloat(summary.MaxPrice),
@@ -184,7 +185,6 @@ DO UPDATE SET latest_price = EXCLUDED.latest_price,
 		nullableFloat(summary.P25Price),
 		nullableFloat(summary.P75Price),
 		summary.SampleCount,
-		defaultWindowDays(summary.WindowDays),
 		summary.LastCollectedAt,
 	); err != nil {
 		return fmt.Errorf("upsert part market summary: %w", err)
@@ -250,11 +250,4 @@ func defaultMappingStatus(value model.MappingStatus) string {
 		return "mapped"
 	}
 	return string(value)
-}
-
-func defaultWindowDays(value int) int {
-	if value <= 0 {
-		return 1
-	}
-	return value
 }

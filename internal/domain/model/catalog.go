@@ -74,6 +74,7 @@ type PartMarketSummary struct {
 	ID              ID
 	PartID          ID
 	SourcePlatform  SourcePlatform
+	SnapshotDate    time.Time
 	LatestPrice     float64
 	MinPrice        float64
 	MaxPrice        float64
@@ -81,7 +82,6 @@ type PartMarketSummary struct {
 	P25Price        float64
 	P75Price        float64
 	SampleCount     int
-	WindowDays      int
 	LastCollectedAt *time.Time
 	AuditFields
 }

@@ -276,6 +276,7 @@ func summarizeCandidatesForPlatform(partID model.ID, platform model.SourcePlatfo
 	return model.PartMarketSummary{
 		PartID:          partID,
 		SourcePlatform:  platform,
+		SnapshotDate:    collectedAt.UTC().Truncate(24 * time.Hour),
 		LatestPrice:     latestPrice,
 		MinPrice:        minPrice(prices),
 		MaxPrice:        maxPrice(prices),
@@ -283,7 +284,6 @@ func summarizeCandidatesForPlatform(partID model.ID, platform model.SourcePlatfo
 		P25Price:        percentilePrice(prices, 0.25),
 		P75Price:        percentilePrice(prices, 0.75),
 		SampleCount:     len(candidates),
-		WindowDays:      1,
 		LastCollectedAt: &collectedAtCopy,
 	}
 }
