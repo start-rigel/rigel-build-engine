@@ -34,31 +34,38 @@
 
 build-engine 会将这些原始商品整理成型号级价格清单，再作为 AI 输入的一部分。
 
-## 当前 AI 输入规范
+## 当前 AI 输入分层
 
-### `user_request`
+当前要明确区分两层：
 
-必须包含：
+1. `console -> build-engine` 的 HTTP 请求结构
+2. `build-engine -> AI` 的最终 payload
 
-- `budget`
-- `use_case`
+### 1. HTTP 请求结构
 
-可选包含：
+当前 `POST /api/v1/advice/catalog` 的实际 HTTP 请求体，仍使用顶层用户字段 + `catalog.items`。
 
-- `build_mode`
-- `brand_preference`
-- `special_requirements`
-- `notes`
+也就是：
 
-### `price_catalog`
+- 顶层字段：
+  - `budget`
+  - `use_case`
+  - `build_mode`
+  - `brand_preference`
+  - `special_requirements`
+  - `notes`
+- 价格目录：
+  - `catalog.items`
+  - 每个条目带 `category`
 
-这里的 `price_catalog` 示例按类别分组展示，目的是让 AI 输入结构更直观。
+### 2. 最终 AI payload
 
-注意：
+真正发给 AI 之前，build-engine 必须把 HTTP 请求转换为：
 
-- 这里是 AI 输入说明性示例
-- 不等于当前 `POST /api/v1/advice/catalog` 的实际 HTTP 请求体结构
-- 当前接口实际仍使用 `catalog.items` 扁平数组，每个条目带 `category`
+- `user_request`
+- `price_catalog`
+
+这里的 `price_catalog` 必须按类别分组，目的是让 AI 输入结构更清晰、更稳定。
 
 `category` 当前允许值：
 
@@ -81,7 +88,7 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 - `price_max`
 - `sample_count`
 
-说明性示例如下：
+最终 AI payload 示例：
 
 ```json
 {
@@ -348,8 +355,11 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
     "budget": 6000,
     "use_case": "gaming",
     "build_mode": "mixed",
-    "price_catalog": {
-      "cpu": [
+    "catalog": {
+      "use_case": "gaming",
+      "build_mode": "mixed",
+      "warnings": [],
+      "items": [
         {
           "category": "CPU",
           "brand": "AMD",
@@ -364,21 +374,6 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
           "platforms": ["jd"]
         },
         {
-          "category": "CPU",
-          "brand": "AMD",
-          "model": "9600x",
-          "display_name": "AMD 9600x",
-          "normalized_key": "cpu-9600x",
-          "sample_count": 5,
-          "avg_price": 1499,
-          "median_price": 1499,
-          "min_price": 1439,
-          "max_price": 1569,
-          "platforms": ["jd"]
-        }
-      ],
-      "gpu": [
-        {
           "category": "GPU",
           "brand": "NVIDIA",
           "model": "rtx 4060",
@@ -390,103 +385,16 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
           "min_price": 2299,
           "max_price": 2499,
           "platforms": ["jd"]
-        },
-        {
-          "category": "GPU",
-          "brand": "NVIDIA",
-          "model": "rtx 4060 ti",
-          "display_name": "NVIDIA rtx 4060 ti",
-          "normalized_key": "gpu-rtx-4060-ti",
-          "sample_count": 3,
-          "avg_price": 3199,
-          "median_price": 3199,
-          "min_price": 3099,
-          "max_price": 3299,
-          "platforms": ["jd"]
         }
-      ],
-      "motherboard": [
-        {
-          "category": "MOTHERBOARD",
-          "brand": "MSI",
-          "model": "b650m mortar wifi",
-          "display_name": "MSI b650m mortar wifi",
-          "normalized_key": "motherboard-b650m-mortar-wifi",
-          "sample_count": 4,
-          "avg_price": 899,
-          "median_price": 899,
-          "min_price": 859,
-          "max_price": 959,
-          "platforms": ["jd"]
-        }
-      ],
-      "ram": [
-        {
-          "category": "RAM",
-          "brand": "Gloway",
-          "model": "ddr5 6000 32g",
-          "display_name": "Gloway ddr5 6000 32g",
-          "normalized_key": "ram-ddr5-6000-32g",
-          "sample_count": 2,
-          "avg_price": 509,
-          "median_price": 509,
-          "min_price": 459,
-          "max_price": 559,
-          "platforms": ["jd"]
-        },
-        {
-          "category": "RAM",
-          "brand": "KingBank",
-          "model": "ddr5 6400 32g",
-          "display_name": "KingBank ddr5 6400 32g",
-          "normalized_key": "ram-ddr5-6400-32g",
-          "sample_count": 3,
-          "avg_price": 599,
-          "median_price": 599,
-          "min_price": 569,
-          "max_price": 639,
-          "platforms": ["jd"]
-        }
-      ],
-      "ssd": [
-        {
-          "category": "SSD",
-          "brand": "WD",
-          "model": "sn770 1tb",
-          "display_name": "WD sn770 1tb",
-          "normalized_key": "ssd-sn770-1tb",
-          "sample_count": 2,
-          "avg_price": 399,
-          "median_price": 399,
-          "min_price": 379,
-          "max_price": 419,
-          "platforms": ["jd"]
-        },
-        {
-          "category": "SSD",
-          "brand": "Lexar",
-          "model": "nm790 1tb",
-          "display_name": "Lexar nm790 1tb",
-          "normalized_key": "ssd-nm790-1tb",
-          "sample_count": 4,
-          "avg_price": 459,
-          "median_price": 459,
-          "min_price": 429,
-          "max_price": 499,
-          "platforms": ["jd"]
-        }
-      ],
-      "psu": [],
-      "case": [],
-      "cooler": []
+      ]
     }
   }'
 ```
 
 说明：
 
-- 上面这段是按 AI 候选目录理解方式展示的请求示例
-- 如果严格对应当前 HTTP 接口实现，仍然是 `catalog.items` 扁平数组结构
+- 上面这段就是当前 HTTP 接口真实请求示例
+- `build-engine` 收到后，会在内部转换成 `user_request + price_catalog` 再发给 AI
 
 响应示例：
 
