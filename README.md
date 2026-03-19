@@ -268,6 +268,13 @@ go run ./cmd/server
 - `RIGEL_INTERNAL_SERVICE_TOKEN`
 - `RIGEL_ADVICE_MAX_CONCURRENCY`
 
+## 开发约束
+
+- `rigel-build-engine` 当前按内网服务设计，不作为默认公网入口
+- 面向 `console` 的内部高成本接口默认必须校验 `X-Rigel-Service-Token`
+- 触发真实 AI 的路径必须保留缓存、去重、并发闸门和超时控制
+- 不要在错误响应、日志或 README 示例里暴露真实内部 token、AI 密钥或其他敏感配置
+
 ## 接口示例
 
 ### 1. 健康检查
