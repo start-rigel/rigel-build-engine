@@ -52,8 +52,13 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 
 ### `price_catalog`
 
-当前实现不是按 `cpu` / `gpu` / `ram` 这些 key 做嵌套分组。
-当前实现是统一放在 `catalog.items` 扁平数组里，每个条目自己带 `category` 字段。
+这里的 `price_catalog` 示例按类别分组展示，目的是让 AI 输入结构更直观。
+
+注意：
+
+- 这里是 AI 输入说明性示例
+- 不等于当前 `POST /api/v1/advice/catalog` 的实际 HTTP 请求体结构
+- 当前接口实际仍使用 `catalog.items` 扁平数组，每个条目带 `category`
 
 `category` 当前允许值：
 
@@ -68,7 +73,6 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 
 每个型号对象包含：
 
-- `category`
 - `model`
 - `display_name`
 - `avg_price`
@@ -77,14 +81,12 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
 - `price_max`
 - `sample_count`
 
-也就是说，当前正确示意应理解为：
+说明性示例如下：
 
 ```json
 {
-  "catalog": {
-    "use_case": "gaming",
-    "build_mode": "mixed",
-    "items": [
+  "price_catalog": {
+    "cpu": [
       {
         "category": "CPU",
         "model": "7500f",
@@ -94,7 +96,9 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
         "min_price": 859,
         "max_price": 939,
         "sample_count": 3
-      },
+      }
+    ],
+    "gpu": [
       {
         "category": "GPU",
         "model": "rtx 4060",
@@ -105,7 +109,13 @@ build-engine 会将这些原始商品整理成型号级价格清单，再作为 
         "max_price": 2499,
         "sample_count": 4
       }
-    ]
+    ],
+    "motherboard": [],
+    "ram": [],
+    "ssd": [],
+    "psu": [],
+    "case": [],
+    "cooler": []
   }
 }
 ```
