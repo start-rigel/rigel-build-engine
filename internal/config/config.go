@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -70,6 +71,9 @@ func Load() (Config, error) {
 	if cfg.PostgresDSN == "" {
 		return Config{}, fmt.Errorf("RIGEL_POSTGRES_DSN must not be empty")
 	}
+	if err := validateAdminToken(cfg.AdminAPIToken); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
 }
@@ -93,4 +97,18 @@ func durationFromEnv(key string, fallback time.Duration) (time.Duration, error) 
 	}
 
 	return parsed, nil
+}
+
+func validateAdminToken(token string) error {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return fmt.Errorf("RIGEL_BUILD_ENGINE_ADMIN_TOKEN must not be empty")
+	}
+	if len(trimmed) < 24 {
+		return fmt.Errorf("RIGEL_BUILD_ENGINE_ADMIN_TOKEN must be at least 24 characters")
+	}
+	if strings.EqualFold(trimmed, "rigel-build-engine-admin-token") {
+		return fmt.Errorf("RIGEL_BUILD_ENGINE_ADMIN_TOKEN must not use the default development token")
+	}
+	return nil
 }

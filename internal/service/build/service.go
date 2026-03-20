@@ -455,7 +455,7 @@ func catalogDisplayName(category model.PartCategory, brand, modelName string) st
 func allowedPlatforms(mode model.BuildMode) ([]model.SourcePlatform, []string) {
 	switch mode {
 	case model.ModeMixed, model.ModeUsedOnly:
-		return []model.SourcePlatform{model.PlatformJD}, []string{"current scope only uses JD collected data; non-JD modes fall back to JD price samples"}
+		return []model.SourcePlatform{model.PlatformJD}, []string{"当前版本仅使用京东采集数据；非京东模式会自动回退为京东价格样本"}
 	default:
 		return []model.SourcePlatform{model.PlatformJD}, nil
 	}

@@ -263,6 +263,7 @@
   - `catalog_ai_limits`
 - `ai_runtime` 支持通过后台清空 token；数据库中的空字符串会覆盖环境变量，不会被 ENV 回填。
 - 鉴权：后台设置接口要求请求头 `X-Rigel-Admin-Token` 与环境变量 `RIGEL_BUILD_ENGINE_ADMIN_TOKEN` 一致。
+- 安全约束：`RIGEL_BUILD_ENGINE_ADMIN_TOKEN` 必填，长度至少 24 位，禁止使用默认开发 token。
 
 说明：
 

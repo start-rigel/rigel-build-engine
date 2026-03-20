@@ -65,14 +65,14 @@ func (s *Service) GenerateBuildRecommendation(ctx context.Context, req BuildReco
 			limit = limits.MaxModelsPerCategory
 			canUseAI = s.settings.AIEnabled(runtime)
 		} else {
-			warnings = append(warnings, "load system settings failed, fallback enabled")
+			warnings = append(warnings, "加载系统设置失败，已回退到目录模板推荐")
 		}
 	}
 	trimmedCatalog := trimCatalogByCategory(catalog, limit)
 
 	if !canUseAI {
 		fallback.Warnings = dedupe(append(fallback.Warnings, warnings...))
-		fallback.Warnings = dedupe(append(fallback.Warnings, "ai runtime not configured or disabled, fallback enabled"))
+		fallback.Warnings = dedupe(append(fallback.Warnings, "AI 运行时未配置或已禁用，已回退到目录模板推荐"))
 		return fallback, nil
 	}
 
@@ -80,13 +80,13 @@ func (s *Service) GenerateBuildRecommendation(ctx context.Context, req BuildReco
 	content, err := s.chatClient.ChatCompletion(ctx, runtime, prompt, s.settings.Timeout(runtime))
 	if err != nil {
 		fallback.Warnings = dedupe(append(fallback.Warnings, warnings...))
-		fallback.Warnings = dedupe(append(fallback.Warnings, fmt.Sprintf("ai request failed (%v), fallback enabled", err)))
+		fallback.Warnings = dedupe(append(fallback.Warnings, fmt.Sprintf("AI 请求失败（%v），已回退到目录模板推荐", err)))
 		return fallback, nil
 	}
 	var out aiOutput
 	if err := decodeAIJSON(content, &out); err != nil {
 		fallback.Warnings = dedupe(append(fallback.Warnings, warnings...))
-		fallback.Warnings = dedupe(append(fallback.Warnings, "ai returned invalid json, fallback enabled"))
+		fallback.Warnings = dedupe(append(fallback.Warnings, "AI 返回结果不是合法 JSON，已回退到目录模板推荐"))
 		return fallback, nil
 	}
 
