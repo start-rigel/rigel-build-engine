@@ -244,11 +244,249 @@ func buildPrompt(req BuildRecommendRequest, catalog buildservice.PriceCatalogRes
 }
 
 func decodeAIJSON(content string, target any) error {
+	raw, err := parseAIResponseObject(content)
+	if err != nil {
+		return err
+	}
+	normalized := normalizeAIOutput(raw)
+	data, _ := json.Marshal(normalized)
+	return json.Unmarshal(data, target)
+}
+
+func sanitizeAIContent(content string) string {
 	content = strings.TrimSpace(content)
 	content = strings.TrimPrefix(content, "```json")
 	content = strings.TrimPrefix(content, "```")
 	content = strings.TrimSuffix(content, "```")
-	return json.Unmarshal([]byte(strings.TrimSpace(content)), target)
+	return strings.TrimSpace(content)
+}
+
+func extractFirstJSONObject(text string) (string, bool) {
+	inString := false
+	escaped := false
+	depth := 0
+	start := -1
+	for i, r := range text {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\' && inString:
+			escaped = true
+		case r == '"':
+			inString = !inString
+		case !inString && r == '{':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case !inString && r == '}':
+			if depth == 0 {
+				continue
+			}
+			depth--
+			if depth == 0 && start >= 0 {
+				return strings.TrimSpace(text[start : i+1]), true
+			}
+		}
+	}
+	return "", false
+}
+
+func parseAIResponseObject(content string) (map[string]any, error) {
+	content = sanitizeAIContent(content)
+	if raw, ok := tryParseJSONObject(content); ok {
+		return raw, nil
+	}
+	var wrapped string
+	if err := json.Unmarshal([]byte(content), &wrapped); err == nil {
+		wrapped = sanitizeAIContent(wrapped)
+		if raw, ok := tryParseJSONObject(wrapped); ok {
+			return raw, nil
+		}
+		content = wrapped
+	}
+	extracted, ok := extractFirstJSONObject(content)
+	if !ok {
+		return nil, fmt.Errorf("no json object found")
+	}
+	if raw, ok := tryParseJSONObject(extracted); ok {
+		return raw, nil
+	}
+	return nil, fmt.Errorf("no json object found")
+}
+
+func tryParseJSONObject(text string) (map[string]any, bool) {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(text), &raw); err != nil {
+		return nil, false
+	}
+	if len(raw) == 0 {
+		return nil, false
+	}
+	return raw, true
+}
+
+func normalizeAIOutput(raw map[string]any) aiOutput {
+	out := aiOutput{
+		Summary:  normalizeAISummary(raw["summary"]),
+		Warnings: toStringSlice(raw["warnings"]),
+		Advice:   normalizeAIAdvice(raw["advice"]),
+	}
+	for _, item := range toAnySlice(raw["build_items"]) {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		buildItem := aiOutputBuildItem{
+			Category:         strings.ToUpper(strings.TrimSpace(toString(m["category"]))),
+			TargetModel:      strings.TrimSpace(toString(m["target_model"])),
+			SelectionReason:  strings.TrimSpace(toString(m["selection_reason"])),
+			Confidence:       toFloat(m["confidence"]),
+			Reason:           strings.TrimSpace(toString(m["reason"])),
+			SuggestedKeyword: strings.TrimSpace(toString(m["suggested_keyword"])),
+		}
+		if buildItem.TargetModel == "" {
+			buildItem.TargetModel = extractSelectedModel(m["selected"])
+		}
+		if buildItem.SelectionReason == "" {
+			buildItem.SelectionReason = firstNonBlank(buildItem.Reason, "AI selected from current catalog")
+		}
+		if buildItem.Category == "" {
+			continue
+		}
+		out.BuildItems = append(out.BuildItems, buildItem)
+	}
+	if strings.TrimSpace(out.Summary) == "" {
+		out.Summary = firstNonBlank(strings.Join(out.Advice.Reasons, "；"), strings.Join(out.Warnings, "；"))
+	}
+	return out
+}
+
+func normalizeAISummary(value any) string {
+	summary := strings.TrimSpace(toString(value))
+	if summary != "" {
+		return summary
+	}
+	raw, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	parts := []string{}
+	if name := strings.TrimSpace(toString(raw["recommended_build_name"])); name != "" {
+		parts = append(parts, name)
+	}
+	if focus := strings.TrimSpace(toString(raw["target_focus"])); focus != "" {
+		parts = append(parts, focus)
+	}
+	if note := strings.TrimSpace(toString(raw["note"])); note != "" {
+		parts = append(parts, note)
+	}
+	budget := toFloat(raw["budget"])
+	useCase := strings.TrimSpace(toString(raw["use_case"]))
+	buildMode := strings.TrimSpace(toString(raw["build_mode"]))
+	if budget > 0 || useCase != "" || buildMode != "" {
+		parts = append(parts, strings.TrimSpace(fmt.Sprintf("预算 %.0f 元，用途 %s，模式 %s。", budget, firstNonBlank(useCase, "未知"), firstNonBlank(buildMode, "未知"))))
+	}
+	return strings.TrimSpace(strings.Join(parts, "；"))
+}
+
+func normalizeAIAdvice(value any) BuildAdviceDetail {
+	raw, ok := value.(map[string]any)
+	if !ok {
+		return BuildAdviceDetail{}
+	}
+	reasons := toStringSlice(raw["reasons"])
+	risks := toStringSlice(raw["risks"])
+	upgrade := toStringSlice(raw["upgrade_advice"])
+	if len(reasons) == 0 {
+		if total := toFloat(raw["estimated_total_price_yuan"]); total > 0 {
+			reasons = append(reasons, fmt.Sprintf("AI 估算总价约 %.0f 元。", total))
+		}
+		reasons = append(reasons, toStringSlice(raw["budget_fit"])...)
+		reasons = append(reasons, toStringSlice(raw["compatibility_checks"])...)
+	}
+	if len(risks) == 0 {
+		risks = append(risks, toStringSlice(raw["compatibility_checks"])...)
+	}
+	if len(upgrade) == 0 {
+		upgrade = append(upgrade, toStringSlice(raw["quick_adjustments"])...)
+	}
+	return BuildAdviceDetail{
+		Reasons:       dedupe(reasons),
+		Risks:         dedupe(risks),
+		UpgradeAdvice: dedupe(upgrade),
+	}
+}
+
+func extractSelectedModel(value any) string {
+	selected, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	return firstNonBlank(
+		strings.TrimSpace(toString(selected["display_name"])),
+		strings.TrimSpace(toString(selected["model"])),
+		strings.TrimSpace(toString(selected["normalized_key"])),
+	)
+}
+
+func toAnySlice(value any) []any {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	return items
+}
+
+func toStringSlice(value any) []string {
+	switch v := value.(type) {
+	case []string:
+		return dedupe(v)
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			s := strings.TrimSpace(toString(item))
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return dedupe(out)
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil
+		}
+		return []string{s}
+	default:
+		return nil
+	}
+}
+
+func toString(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	default:
+		return ""
+	}
+}
+
+func toFloat(value any) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case json.Number:
+		f, _ := v.Float64()
+		return f
+	default:
+		return 0
+	}
 }
 
 func groupedCandidates(catalog buildservice.PriceCatalogResponse) map[model.PartCategory][]buildservice.PriceCatalogItem {

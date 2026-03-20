@@ -28,6 +28,9 @@ func (c *HTTPChatClient) ChatCompletion(ctx context.Context, runtime settings.AI
 			{"role": "system", "content": "You are a PC build planning assistant. Output JSON only."},
 			{"role": "user", "content": prompt},
 		},
+		"response_format": map[string]string{
+			"type": "json_object",
+		},
 	}
 	body, _ := json.Marshal(payload)
 	if timeout <= 0 {
@@ -67,6 +70,23 @@ func (c *HTTPChatClient) ChatCompletion(ctx context.Context, runtime settings.AI
 	switch content := parsed.Choices[0].Message.Content.(type) {
 	case string:
 		return content, nil
+	case []any:
+		var parts []string
+		for _, part := range content {
+			item, ok := part.(map[string]any)
+			if !ok {
+				continue
+			}
+			text, ok := item["text"].(string)
+			if ok && strings.TrimSpace(text) != "" {
+				parts = append(parts, text)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, "\n"), nil
+		}
+		raw, _ := json.Marshal(content)
+		return string(raw), nil
 	default:
 		raw, _ := json.Marshal(content)
 		return string(raw), nil

@@ -2,6 +2,7 @@ package advice
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -103,5 +104,79 @@ func TestGenerateBuildRecommendationAlwaysCoversEightCategories(t *testing.T) {
 	}
 	if got := len(resp.BuildItems); got != 8 {
 		t.Fatalf("expected 8 categories, got %d", got)
+	}
+}
+
+func TestDecodeAIJSONSupportsCodeFenceAndPreface(t *testing.T) {
+	content := "这是推荐结果：\n```json\n{\"summary\":\"ok\",\"warnings\":[],\"build_items\":[],\"advice\":{\"reasons\":[],\"risks\":[],\"upgrade_advice\":[]}}\n```"
+	var out aiOutput
+	if err := decodeAIJSON(content, &out); err != nil {
+		t.Fatalf("decodeAIJSON() error = %v", err)
+	}
+	if out.Summary != "ok" {
+		t.Fatalf("expected summary ok, got %q", out.Summary)
+	}
+}
+
+func TestExtractFirstJSONObjectWithNestedQuotes(t *testing.T) {
+	text := `prefix {"summary":"a {b}","warnings":[],"build_items":[],"advice":{"reasons":[],"risks":[],"upgrade_advice":[]}} suffix`
+	got, ok := extractFirstJSONObject(text)
+	if !ok {
+		t.Fatal("expected json object to be extracted")
+	}
+	var out aiOutput
+	if err := json.Unmarshal([]byte(got), &out); err != nil {
+		t.Fatalf("unmarshal extracted json error = %v", err)
+	}
+	if out.Summary != "a {b}" {
+		t.Fatalf("expected nested braces in string preserved, got %q", out.Summary)
+	}
+}
+
+func TestDecodeAIJSONSupportsJSONStringWrapper(t *testing.T) {
+	content := `"{\"summary\":\"ok\",\"warnings\":[],\"build_items\":[],\"advice\":{\"reasons\":[],\"risks\":[],\"upgrade_advice\":[]}}"`
+	var out aiOutput
+	if err := decodeAIJSON(content, &out); err != nil {
+		t.Fatalf("decodeAIJSON() error = %v", err)
+	}
+	if out.Summary != "ok" {
+		t.Fatalf("expected summary ok, got %q", out.Summary)
+	}
+}
+
+func TestDecodeAIJSONSupportsOpenRouterVariantShape(t *testing.T) {
+	content := `{
+		"summary": {"budget": 6000, "use_case": "gaming", "build_mode": "mixed", "recommended_build_name": "6000元电竞主机"},
+		"warnings": ["w1"],
+		"build_items": [
+			{
+				"category":"CPU",
+				"selected":{"display_name":"CPU AMD Ryzen 7600","avg_price":1114},
+				"reason":"游戏更均衡",
+				"suggested_keyword":"Ryzen 7600"
+			}
+		],
+		"advice": {
+			"estimated_total_price_yuan": 5980,
+			"budget_fit": ["预算内"],
+			"quick_adjustments": ["可升级 2TB SSD"],
+			"compatibility_checks": ["确认主板 BIOS"]
+		}
+	}`
+	var out aiOutput
+	if err := decodeAIJSON(content, &out); err != nil {
+		t.Fatalf("decodeAIJSON() error = %v", err)
+	}
+	if out.Summary == "" {
+		t.Fatal("expected summary from object to be normalized")
+	}
+	if len(out.BuildItems) != 1 {
+		t.Fatalf("expected one build item, got %d", len(out.BuildItems))
+	}
+	if out.BuildItems[0].TargetModel != "CPU AMD Ryzen 7600" {
+		t.Fatalf("expected target model from selected.display_name, got %q", out.BuildItems[0].TargetModel)
+	}
+	if got := out.Advice.UpgradeAdvice; len(got) == 0 || got[0] != "可升级 2TB SSD" {
+		t.Fatalf("expected quick_adjustments mapped to upgrade_advice, got %#v", got)
 	}
 }

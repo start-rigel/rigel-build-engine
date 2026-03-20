@@ -514,8 +514,9 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
 
 说明：
 
-- 当前 `provider` 可能是本地占位实现，例如 `local`
-- 当前 `fallback_used=true` 代表仍走模板化推荐路径，不代表已接入真实外部 AI
+- 当前 `provider` 默认为 `build-engine`
+- `fallback_used=false` 表示已走真实 AI 链路并完成结构化解析；`fallback_used=true` 表示已回退到目录模板推荐
+- AI 上游返回结构允许存在差异（如 `summary` 对象、`build_items.selected`、`advice.quick_adjustments`），build-engine 会先做字段归一化再输出统一响应
 - 如果 `catalog.items` 为空，接口会返回 `400`
 
 ## 当前重点
@@ -529,7 +530,6 @@ curl -X POST http://localhost:18082/api/v1/advice/catalog \
 
 ## TODO / MOCK
 
-- `TODO`: 接入真实外部 AI API
 - `TODO`: 继续收紧型号归一规则
 - `TODO`: 与 `rigel_keyword_seeds` 形成稳定映射关系
-- `MOCK`: 当前仍可保留本地模板化分析作为过渡实现
+- `MOCK`: 当 AI 上游不可用或返回不可解析结果时，仍会自动回退到本地模板化分析
