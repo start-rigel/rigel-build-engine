@@ -9,21 +9,22 @@ import (
 
 // Config contains the runtime contract for the build engine service.
 type Config struct {
-	ServiceName     string
-	HTTPPort        string
-	LogLevel        string
-	PostgresDSN     string
-	RedisAddr       string
-	BuildEngineMode string
-	AIBaseURL       string
-	AIGatewayToken  string
-	AIToken         string
-	AIModel         string
-	AITimeout       time.Duration
-	AdminAPIToken   string
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	IdleTimeout     time.Duration
+	ServiceName          string
+	HTTPPort             string
+	LogLevel             string
+	PostgresDSN          string
+	RedisAddr            string
+	InternalServiceToken string
+	BuildEngineMode      string
+	AIBaseURL            string
+	AIGatewayToken       string
+	AIToken              string
+	AIModel              string
+	AITimeout            time.Duration
+	AdminAPIToken        string
+	ReadTimeout          time.Duration
+	WriteTimeout         time.Duration
+	IdleTimeout          time.Duration
 }
 
 // Load reads service configuration from environment variables.
@@ -48,21 +49,22 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServiceName:     stringFromEnv("RIGEL_SERVICE_NAME", "rigel-build-engine"),
-		HTTPPort:        stringFromEnv("RIGEL_HTTP_PORT", stringFromEnv("RIGEL_BUILD_ENGINE_PORT", "8080")),
-		LogLevel:        stringFromEnv("RIGEL_LOG_LEVEL", "info"),
-		PostgresDSN:     stringFromEnv("RIGEL_POSTGRES_DSN", ""),
-		RedisAddr:       stringFromEnv("RIGEL_REDIS_ADDR", ""),
-		BuildEngineMode: stringFromEnv("RIGEL_BUILD_ENGINE_MODE", "local"),
-		AIBaseURL:       stringFromEnv("RIGEL_AI_BASE_URL", ""),
-		AIGatewayToken:  stringFromEnv("RIGEL_AI_GATEWAY_TOKEN", ""),
-		AIToken:         stringFromEnv("RIGEL_AI_TOKEN", ""),
-		AIModel:         stringFromEnv("RIGEL_AI_MODEL", "openai/gpt-5.4-nano"),
-		AITimeout:       aiTimeout,
-		AdminAPIToken:   stringFromEnv("RIGEL_BUILD_ENGINE_ADMIN_TOKEN", ""),
-		ReadTimeout:     readTimeout,
-		WriteTimeout:    writeTimeout,
-		IdleTimeout:     idleTimeout,
+		ServiceName:          stringFromEnv("RIGEL_SERVICE_NAME", "rigel-build-engine"),
+		HTTPPort:             stringFromEnv("RIGEL_HTTP_PORT", stringFromEnv("RIGEL_BUILD_ENGINE_PORT", "8080")),
+		LogLevel:             stringFromEnv("RIGEL_LOG_LEVEL", "info"),
+		PostgresDSN:          stringFromEnv("RIGEL_POSTGRES_DSN", ""),
+		RedisAddr:            stringFromEnv("RIGEL_REDIS_ADDR", ""),
+		InternalServiceToken: stringFromEnv("RIGEL_INTERNAL_SERVICE_TOKEN", ""),
+		BuildEngineMode:      stringFromEnv("RIGEL_BUILD_ENGINE_MODE", "local"),
+		AIBaseURL:            stringFromEnv("RIGEL_AI_BASE_URL", ""),
+		AIGatewayToken:       stringFromEnv("RIGEL_AI_GATEWAY_TOKEN", ""),
+		AIToken:              stringFromEnv("RIGEL_AI_TOKEN", ""),
+		AIModel:              stringFromEnv("RIGEL_AI_MODEL", "openai/gpt-5.4-nano"),
+		AITimeout:            aiTimeout,
+		AdminAPIToken:        stringFromEnv("RIGEL_BUILD_ENGINE_ADMIN_TOKEN", ""),
+		ReadTimeout:          readTimeout,
+		WriteTimeout:         writeTimeout,
+		IdleTimeout:          idleTimeout,
 	}
 
 	if cfg.HTTPPort == "" {
@@ -72,6 +74,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("RIGEL_POSTGRES_DSN must not be empty")
 	}
 	if err := validateAdminToken(cfg.AdminAPIToken); err != nil {
+		return Config{}, err
+	}
+	if err := validateInternalServiceToken(cfg.InternalServiceToken); err != nil {
 		return Config{}, err
 	}
 
@@ -109,6 +114,20 @@ func validateAdminToken(token string) error {
 	}
 	if strings.EqualFold(trimmed, "rigel-build-engine-admin-token") {
 		return fmt.Errorf("RIGEL_BUILD_ENGINE_ADMIN_TOKEN must not use the default development token")
+	}
+	return nil
+}
+
+func validateInternalServiceToken(token string) error {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return fmt.Errorf("RIGEL_INTERNAL_SERVICE_TOKEN must not be empty")
+	}
+	if len(trimmed) < 24 {
+		return fmt.Errorf("RIGEL_INTERNAL_SERVICE_TOKEN must be at least 24 characters")
+	}
+	if strings.EqualFold(trimmed, "change-me-in-production") {
+		return fmt.Errorf("RIGEL_INTERNAL_SERVICE_TOKEN must not use the default placeholder token")
 	}
 	return nil
 }

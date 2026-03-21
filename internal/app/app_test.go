@@ -41,7 +41,7 @@ func (r *memoryRepo) UpsertSystemSetting(_ context.Context, _ string, _ json.Raw
 func TestHealthz(t *testing.T) {
 	repo := &memoryRepo{}
 	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
-	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local"}, builder, adviceservice.New("build-engine"), nil)
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", InternalServiceToken: "rigel_internal_service_token_for_test_123456"}, builder, adviceservice.New("build-engine"), nil)
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
@@ -53,8 +53,9 @@ func TestHealthz(t *testing.T) {
 func TestCatalogPricesRoute(t *testing.T) {
 	repo := &memoryRepo{}
 	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
-	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local"}, builder, adviceservice.New("build-engine"), nil)
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", InternalServiceToken: "rigel_internal_service_token_for_test_123456"}, builder, adviceservice.New("build-engine"), nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/prices?use_case=gaming&build_mode=new_only&limit=20", nil)
+	req.Header.Set("X-Rigel-Service-Token", "rigel_internal_service_token_for_test_123456")
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -65,9 +66,10 @@ func TestCatalogPricesRoute(t *testing.T) {
 func TestGenerateCatalogAdviceRoute(t *testing.T) {
 	repo := &memoryRepo{}
 	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
-	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local"}, builder, adviceservice.New("build-engine"), nil)
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", InternalServiceToken: "rigel_internal_service_token_for_test_123456"}, builder, adviceservice.New("build-engine"), nil)
 	body := []byte(`{"budget":6000,"use_case":"gaming","build_mode":"mixed","catalog":{"use_case":"gaming","build_mode":"mixed","items":[{"category":"CPU","display_name":"Ryzen 5 7500F","normalized_key":"cpu-ryzen-7500f","sample_count":5,"avg_price":920,"median_price":899},{"category":"GPU","display_name":"RTX 4060","normalized_key":"gpu-rtx-4060","sample_count":6,"avg_price":2410,"median_price":2399}]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/advice/catalog", bytes.NewReader(body))
+	req.Header.Set("X-Rigel-Service-Token", "rigel_internal_service_token_for_test_123456")
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -79,7 +81,7 @@ func TestSystemSettingsRequireAdminToken(t *testing.T) {
 	repo := &memoryRepo{}
 	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
 	settings := settingsservice.New(repo, config.Config{AIModel: "openai/gpt-5.4-nano", AdminAPIToken: "token-123"})
-	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", AdminAPIToken: "token-123"}, builder, adviceservice.New("build-engine"), settings)
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", AdminAPIToken: "token-123", InternalServiceToken: "rigel_internal_service_token_for_test_123456"}, builder, adviceservice.New("build-engine"), settings)
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/settings/system", nil)
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
@@ -92,12 +94,24 @@ func TestSystemSettingsWithAdminToken(t *testing.T) {
 	repo := &memoryRepo{}
 	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
 	settings := settingsservice.New(repo, config.Config{AIModel: "openai/gpt-5.4-nano", AdminAPIToken: "token-123"})
-	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", AdminAPIToken: "token-123"}, builder, adviceservice.New("build-engine"), settings)
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", AdminAPIToken: "token-123", InternalServiceToken: "rigel_internal_service_token_for_test_123456"}, builder, adviceservice.New("build-engine"), settings)
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/settings/system", nil)
 	req.Header.Set("X-Rigel-Admin-Token", "token-123")
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRecommendBuildRequireServiceToken(t *testing.T) {
+	repo := &memoryRepo{}
+	builder := buildservice.New(repo, func() time.Time { return time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC) })
+	application := New(config.Config{ServiceName: "rigel-build-engine", BuildEngineMode: "local", InternalServiceToken: "rigel_internal_service_token_for_test_123456"}, builder, adviceservice.New("build-engine"), nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/recommend/build", bytes.NewReader([]byte(`{"budget":6000,"use_case":"gaming","build_mode":"mixed"}`)))
+	rec := httptest.NewRecorder()
+	application.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

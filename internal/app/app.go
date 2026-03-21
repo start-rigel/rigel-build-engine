@@ -59,6 +59,9 @@ func (a *App) handleGenerateCatalogAdvice(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	if !a.requireInternalServiceToken(w, r) {
+		return
+	}
 	var req adviceservice.GenerateCatalogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -75,6 +78,9 @@ func (a *App) handleGenerateCatalogAdvice(w http.ResponseWriter, r *http.Request
 func (a *App) handleRecommendBuild(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !a.requireInternalServiceToken(w, r) {
 		return
 	}
 	var req adviceservice.BuildRecommendRequest
@@ -153,6 +159,9 @@ func (a *App) handleCatalogPrices(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	if !a.requireInternalServiceToken(w, r) {
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	useCase := model.UseCase(strings.TrimSpace(r.URL.Query().Get("use_case")))
 	buildMode := model.BuildMode(strings.TrimSpace(r.URL.Query().Get("build_mode")))
@@ -166,6 +175,19 @@ func (a *App) handleCatalogPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (a *App) requireInternalServiceToken(w http.ResponseWriter, r *http.Request) bool {
+	token := strings.TrimSpace(a.cfg.InternalServiceToken)
+	if token == "" {
+		writeError(w, http.StatusServiceUnavailable, "internal service token is not configured")
+		return false
+	}
+	if strings.TrimSpace(r.Header.Get("X-Rigel-Service-Token")) != token {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return false
+	}
+	return true
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
